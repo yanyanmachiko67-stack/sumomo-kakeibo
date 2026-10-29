@@ -535,7 +535,9 @@ function receiptCandidateNames(lines,index,previousUnitIndex=-1){
   const raw=String(lines[j]||'').trim();
   if(!raw || /[¥￥]\s*\d+/.test(raw))continue;
   if(/(?:\d{1,2}\s*[日月年]\s*[(（]?[日月火水木金土]|\d{1,2}[:：]\d{2}|No\s*[:：]\s*\d+|20\d{2}[\/.-]\d{1,2})/i.test(raw))continue;
-  if(/(?:領収|返品|交換|購入店|TEL|電話|登録番号|担当|有効期限|ご持参|レシート|小計|合計|税額|税率|クレジット|お預|お釣|消費税|外税|内税)/i.test(raw))continue;
+  // OCR frequently inserts spaces between Japanese characters: normalize only for filtering.
+  const compact=raw.replace(/[\s\u3000・･、，,。．. ]/g,'');
+  if(/(?:領収証?|領収書|返品|交換|購入店|TEL|電話|登録番号|担当|有効期限|賞味期限|消費期限|ご持参|持参下さい|持参ください|レシート|小計|合計|税額|税率|クレジット|お預|お釣|消費税|外税|内税|ご購入|お買上|お買い上げ|ありがとうございました|再発行)/i.test(compact))continue;
   if(/(?:RF|RE)\s*\d{8,}/i.test(raw)||/\d{8,14}/.test(raw)||/単\s*\d+\s*[x×Xｘ]/i.test(raw))continue;
   const name=raw.replace(/^[\s\W]*\d{2,5}\s*/u,'').replace(/^[\s\p{P}\p{S}]+/u,'').replace(/[※＊*]\s*$/,'').trim();
   if(!name||name.length>90||!/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(name))continue;
