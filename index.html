@@ -132,6 +132,7 @@ h2{font-size:18px;margin:4px 0 12px} h3{font-size:15px;margin:4px 0 10px}
       <small id="ocrStatus" class="muted" aria-live="polite">初回は日本語認識データの読み込みに時間がかかることがあるよ。インターネット接続が必要です。</small>
       <details style="margin-top:12px"><summary style="font-size:13px;cursor:pointer">文字を直接貼り付けて試す</summary><textarea id="ocrRaw" placeholder="商品名　198\n牛乳　258\n洗剤　298" style="margin-top:8px"></textarea><button class="btn secondary" onclick="parseReceiptText()">文字から商品を抽出</button></details>
       <div id="ocrResults" style="display:none;margin-top:16px">
+        <div class="actions" style="margin-bottom:12px"><button class="btn secondary" type="button" onclick="parseReceiptText()">🔁 前回のOCR文字でもう一度解析</button></div>
         <h3>🧺 読み取った商品（確認・修正できるよ）</h3>
         <p class="muted" style="font-size:12px">商品名・金額・カテゴリを確認してね。合計・小計・税などは商品として取り込まないようにしているけれど、間違うこともあるよ。</p>
         <div style="margin:12px 0;padding:12px;border:1px solid #edc4d0;border-radius:12px">
@@ -504,22 +505,22 @@ function receiptCleanProductName(source){
  return name;
 }
 function receiptNameBeforeUnit(lines,index,previousUnitIndex=-1){
- // 前の商品の単価行より後だけを調べ、OCRで崩れた商品名も候補として残す。
+ // 商品の単価行の直前から、バーコードや日付を除外して商品説明を選ぶ。
  const candidates=[];
- for(let j=index-1;j>previousUnitIndex&&j>=Math.max(0,index-6);j--){
+ for(let j=index-1;j>previousUnitIndex&&j>=Math.max(0,index-7);j--){
   const original=String(lines[j]||'').trim();
   if(!original)continue;
-  // バーコード、レジ情報、価格行は商品名ではない。
   if(/(?:領収|返品|交換|購入店|TEL|電話|登録番号|担当|有効期限|ご持参|レシート|小計|合計|税額|税率|クレジット|お預|お釣|消費税|外税|内税)/i.test(original))continue;
   if(/(?:RF|RE)\s*\d{8,}/i.test(original)||/\d{8,14}/.test(original))continue;
   if(/[¥￥]\s*\d+/.test(original)||/単\s*\d+\s*[x×Xｘ]/i.test(original))continue;
-  let name=receiptCleanProductName(original);
-  // OCRの「0011 の セ 八 分光」のような先頭数字は品番として除去。
-  name=name.replace(/^[\s\d０-９]+/u,'').replace(/^[\s\W]+/u,'').trim();
+  // 日時・取引番号は日本語が混じっていても商品名ではない。
+  if(/(?:\d{1,2}\s*[日月年]\s*[(（]?[日月火水木金土]|\d{1,2}[:：]\d{2}|No\s*[:：]\s*\d+|20\d{2}[\/.-]\d{1,2})/i.test(original))continue;
+  let name=receiptCleanProductName(original)
+   .replace(/^[\s\d０-９]+/u,'').replace(/^[\s\W]+/u,'').trim();
   if(!name||name.length>70)continue;
   const japanese=(name.match(/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/gu)||[]).length;
   if(japanese<1||/^(?:No|RF|RE|JAN|品番|商品コード|レジ|担当|店舗)/i.test(name))continue;
-  candidates.push({name,score:100-(index-j)*18+Math.min(japanese,10)});
+  candidates.push({name,score:100-(index-j)*16+Math.min(japanese,12)});
  }
  candidates.sort((a,b)=>b.score-a.score);
  return candidates[0]?.name||'商品名を確認してね';
