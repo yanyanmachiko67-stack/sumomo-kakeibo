@@ -528,16 +528,18 @@ function receiptNameBeforeUnit(lines,index,previousUnitIndex=-1){
 // 商品ごとに近接するOCR文字から選択候補を作る（レシート外には保存しない）。
 function receiptCandidateNames(lines,index,previousUnitIndex=-1){
  const out=[];
- for(let j=index-1;j>previousUnitIndex&&j>=Math.max(0,index-8);j--){
-  const raw=String(lines[j]||'').trim();
-  if(!raw||/[¥￥]\s*\d+/.test(raw))continue;
-  if(/(?:\d{1,2}\s*[日月年]\s*[(（]?[日月火水木金土]|\d{1,2}[:：]\d{2}|No\s*[:：]\s*\d+|20\d{2}[\/.-]\d{1,2})/i.test(raw))continue;
-  if(/(?:領収|返品|交換|購入店|TEL|電話|登録番号|担当|有効期限|ご持参|レシート|小計|合計|税額|税率|クレジット|お預|お釣|消費税|外税|内税)/i.test(raw))continue;
-  if(/(?:RF|RE)\s*\d{8,}/i.test(raw)||/\d{8,14}/.test(raw)||/単\s*\d+\s*[x×Xｘ]/i.test(raw))continue;
+ const add=raw=>{
+  raw=String(raw||'').trim();
+  if(!raw||/[¥￥]\s*\d+/.test(raw))return;
+  if(/(?:\d{1,2}\s*[日月年]\s*[(（]?[日月火水木金土]|\d{1,2}[:：]\d{2}|No\s*[:：]\s*\d+|20\d{2}[\/.-]\d{1,2})/i.test(raw))return;
+  if(/(?:領収|返品|交換|購入店|TEL|電話|登録番号|担当|有効期限|ご持参|レシート|小計|合計|税額|税率|クレジット|お預|お釣|消費税|外税|内税)/i.test(raw))return;
+  if(/(?:RF|RE)\s*\d{8,}/i.test(raw)||/\d{8,14}/.test(raw)||/単\s*\d+\s*[x×Xｘ]/i.test(raw))return;
   let name=raw.replace(/^[\s\W]*\d{2,5}\s*/u,'').replace(/^[\s\W]+/u,'').replace(/[※＊*]\s*$/,'').trim();
-  if(!name||name.length>70||!/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(name))continue;
+  if(!name||name.length>90||!/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(name))return;
   if(!out.includes(name))out.push(name);
- }
+ };
+ for(let j=index-1;j>previousUnitIndex&&j>=Math.max(0,index-10);j--)add(lines[j]);
+ if(!out.length)for(let j=index-1;j>=Math.max(0,index-6);j--)add(lines[j]);
  return out;
 }
 function selectReceiptCandidate(itemIndex,candidateIndex){
@@ -568,6 +570,10 @@ function parseSeparatedPriceReceipt(lines,expected,isKidsStore){
   const q=unitLine(line);
   if(q){
    const candidates=receiptCandidateNames(lines,i,previousUnitIndex);
+   if(!candidates.length){
+    const near=String(lines[i-1]||'').trim();
+    if(near&&!/[¥￥]\s*\d+/.test(near)&&!/\d{8,14}/.test(near)&&!/(?:\d{1,2}[:：]\d{2}|No\s*[:：])/i.test(near)&&/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(near))candidates.push(near.replace(/^\s*\d{2,5}\s*/,'').trim());
+   }
    const name=candidates[0]||receiptNameBeforeUnit(lines,i,previousUnitIndex);
    previousUnitIndex=i;
    const nearby=lines.slice(Math.max(0,i-4),i+1);
