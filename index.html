@@ -525,6 +525,26 @@ function receiptNameBeforeUnit(lines,index,previousUnitIndex=-1){
  candidates.sort((a,b)=>b.score-a.score);
  return candidates[0]?.name||'商品名を確認してね';
 }
+// 商品ごとに近接するOCR文字から選択候補を作る（レシート外には保存しない）。
+function receiptCandidateNames(lines,index,previousUnitIndex=-1){
+ const out=[];
+ for(let j=index-1;j>previousUnitIndex&&j>=Math.max(0,index-8);j--){
+  const raw=String(lines[j]||'').trim();
+  if(!raw||/[¥￥]\s*\d+/.test(raw))continue;
+  if(/(?:\d{1,2}\s*[日月年]\s*[(（]?[日月火水木金土]|\d{1,2}[:：]\d{2}|No\s*[:：]\s*\d+|20\d{2}[\/.-]\d{1,2})/i.test(raw))continue;
+  if(/(?:領収|返品|交換|購入店|TEL|電話|登録番号|担当|有効期限|ご持参|レシート|小計|合計|税額|税率|クレジット|お預|お釣|消費税|外税|内税)/i.test(raw))continue;
+  if(/(?:RF|RE)\s*\d{8,}/i.test(raw)||/\d{8,14}/.test(raw)||/単\s*\d+\s*[x×Xｘ]/i.test(raw))continue;
+  let name=raw.replace(/^[\s\W]*\d{2,5}\s*/u,'').replace(/^[\s\W]+/u,'').replace(/[※＊*]\s*$/,'').trim();
+  if(!name||name.length>70||!/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(name))continue;
+  if(!out.includes(name))out.push(name);
+ }
+ return out;
+}
+function selectReceiptCandidate(itemIndex,candidateIndex){
+ const item=receiptItems[itemIndex];if(!item)return;
+ const name=(item.candidates||[])[candidateIndex];if(!name)return;
+ item.name=name;renderReceiptItems();
+}
 let receiptNameDiagnostics=[];
 function parseSeparatedPriceReceipt(lines,expected,isKidsStore){
  const parsed=[],excluded=[];
@@ -547,11 +567,12 @@ function parseSeparatedPriceReceipt(lines,expected,isKidsStore){
   if(/(?:返品|交換|ご購入店|TEL|電話|登録番号|担当|有効期限|ご持参|レシート|商品番号)/i.test(line))continue;
   const q=unitLine(line);
   if(q){
-   const name=receiptNameBeforeUnit(lines,i,previousUnitIndex);
-    previousUnitIndex=i;
+   const candidates=receiptCandidateNames(lines,i,previousUnitIndex);
+   const name=candidates[0]||receiptNameBeforeUnit(lines,i,previousUnitIndex);
+   previousUnitIndex=i;
    const nearby=lines.slice(Math.max(0,i-4),i+1);
    receiptNameDiagnostics.push({price:q.amount,chosen:name,nearby});
-   parsed.push({name,amount:q.amount,category:isKidsStore&&cats().some(c=>c.name==='子ども費')?'子ども費':guessedCategory(name)});
+   parsed.push({name,amount:q.amount,candidates,category:isKidsStore&&cats().some(c=>c.name==='子ども費')?'子ども費':guessedCategory(name)});
    pending='';continue;
   }
   const amount=money(line);
@@ -682,7 +703,7 @@ function renderReceiptExcluded(){
 }
 function renderReceiptItems(){
  const el=document.getElementById('ocrItems');
- el.innerHTML=receiptItems.length?receiptItems.map((r,i)=>`<div class="card" style="margin:0;padding:10px;background:var(--bg)"><div class="formgrid" style="gap:7px"><div><label>商品名</label><input value="${esc(r.name)}" oninput="receiptItems[${i}].name=this.value"></div><div><label>税込金額（円）</label><input type="number" min="0" step="1" inputmode="numeric" value="${esc(r.amount)}" oninput="receiptItems[${i}].amount=Number(this.value);updateReceiptTotal()"></div><div><label>カテゴリ</label><select onchange="receiptItems[${i}].category=this.value">${cats().map(c=>`<option value="${esc(c.name)}" ${r.category===c.name?'selected':''}>${esc(c.name)}</option>`).join('')}</select></div><div style="display:flex;align-items:end"><button class="btn secondary" style="width:100%" onclick="receiptItems.splice(${i},1);renderReceiptItems()">削除</button></div></div></div>`).join(''):'<div class="empty">商品がまだないよ。追加してね 🌷</div>';
+ el.innerHTML=receiptItems.length?receiptItems.map((r,i)=>`<div class="card" style="margin:0;padding:10px;background:var(--bg)"><div class="formgrid" style="gap:7px"><div><label>商品名</label><input value="${esc(r.name)}" oninput="receiptItems[${i}].name=this.value">${Array.isArray(r.candidates)&&r.candidates.length?`<details style="margin-top:7px"><summary style="cursor:pointer;font-size:13px;color:#a34c72;font-weight:700">🔍 候補から選ぶ（${r.candidates.length}件）</summary><div class="list" style="margin-top:8px">${r.candidates.map((name,k)=>`<button type="button" class="btn secondary" style="text-align:left;white-space:normal;overflow-wrap:anywhere;font-weight:500" onclick="selectReceiptCandidate(${i},${k})">${esc(name)}</button>`).join('')}</div><small class="muted">文字化けがあれば上の商品名欄で直せるよ</small></details>`:''}</div><div><label>税込金額（円）</label><input type="number" min="0" step="1" inputmode="numeric" value="${esc(r.amount)}" oninput="receiptItems[${i}].amount=Number(this.value);updateReceiptTotal()"></div><div><label>カテゴリ</label><select onchange="receiptItems[${i}].category=this.value">${cats().map(c=>`<option value="${esc(c.name)}" ${r.category===c.name?'selected':''}>${esc(c.name)}</option>`).join('')}</select></div><div style="display:flex;align-items:end"><button class="btn secondary" style="width:100%" onclick="receiptItems.splice(${i},1);renderReceiptItems()">削除</button></div></div></div>`).join(''):'<div class="empty">商品がまだないよ。追加してね 🌷</div>';
  renderReceiptExcluded();
  updateReceiptTotal();
 }
