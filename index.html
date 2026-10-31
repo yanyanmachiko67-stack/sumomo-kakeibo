@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>すもも家計簿 Ver.10.14（支払総額OCR改善）</title>
+<title>すもも家計簿 Ver.10.16（商品取りこぼし・値引き改善）</title>
 <style>
 :root{--pink:#e88ca8;--pink2:#f7dce5;--ink:#3d3438;--muted:#8b7d83;--bg:#fff8fa;--card:#fff;--line:#eadde2;--green:#79b89a;--blue:#8caed8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
@@ -27,7 +27,7 @@ h2{font-size:18px;margin:4px 0 12px} h3{font-size:15px;margin:4px 0 10px}
 </head>
 <body>
 <div class="app">
-  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.14（支払総額OCR改善） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
+  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.16（商品取りこぼし・値引き改善） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
   <nav>
     <button class="tab active" data-page="home">ホーム</button>
     <button class="tab" data-page="add">支出を追加</button>
@@ -142,6 +142,7 @@ h2{font-size:18px;margin:4px 0 12px} h3{font-size:15px;margin:4px 0 10px}
         </div>
         <div style="margin:10px 0"><label for="receiptStoreSelect">🏬 店舗（OCRで違ったら選んでね）</label><select id="receiptStoreSelect" onchange="changeReceiptStore(this.value)"><option value="">自動判定・その他</option><option value="taiyo">タイヨー</option><option value="birthday">バースデイ</option><option value="nishimatsuya">西松屋</option></select></div><div id="ocrItems" class="list"></div>
         <div id="ocrExcluded" style="margin-top:10px"></div>
+        <div style="margin-top:12px;padding:12px;border:1px solid #edc4d0;border-radius:12px"><label for="receiptDiscountInput">🏷️ レシートの値引き合計（円・確認して変更できるよ）</label><input id="receiptDiscountInput" type="number" min="0" step="1" inputmode="numeric" value="0" oninput="receiptDetectedDiscount=Math.max(0,Number(this.value)||0);updateReceiptTotal()"><small class="muted">値引きが読み取れた場合は自動入力。読み取れなければレシートの金額を入力してね。</small></div>
         <details id="ocrDiagnostic" style="margin-top:12px;padding:12px;border:1px solid #edc4d0;border-radius:12px"><summary style="cursor:pointer;font-weight:700">🔍 商品名の読み取り診断（テスト用）</summary><p class="muted" style="font-size:12px">商品名を探した前後の文字だけ表示するよ。個人情報が含まれることもあるので、スクショを送る前に確認してね。</p><div id="ocrDiagnosticBody" style="font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere"></div></details>
         <div class="actions"><button class="btn secondary" onclick="addReceiptItem()">＋ 商品を追加</button></div>
         <div class="row" style="margin-top:12px"><strong id="ocrTotal">商品合計 ¥0</strong></div><p id="ocrTaxDetail" class="muted" style="font-size:12px;margin-top:5px"></p>
@@ -425,7 +426,7 @@ let receiptExcluded=[];
 let receiptObjectURL=null;
 function receiptStatus(message){document.getElementById('ocrStatus').textContent=message}
 function previewReceipt(){
- receiptDetectedTax=0;receiptDetectedDiscount=0;receiptStoreHint='';receiptAutoTotal=false;document.getElementById('receiptExpectedTotal').value='';
+ receiptDetectedTax=0;receiptDetectedDiscount=0;document.getElementById('receiptDiscountInput').value='0';receiptStoreHint='';receiptAutoTotal=false;document.getElementById('receiptExpectedTotal').value='';
  const file=document.getElementById('receiptImage').files[0];
  const img=document.getElementById('receiptPreview');
  if(receiptObjectURL)URL.revokeObjectURL(receiptObjectURL);
@@ -636,11 +637,13 @@ function receiptDefaultCategory(name,storeHint){
 }
 function detectReceiptDiscount(lines){
  let total=0;
- for(const line of lines){
-  const compact=line.replace(/[，,]/g,'');
-  if(!/(?:割引|値引|C割|クーポン|ｸｰﾎﾟﾝ|M001\)|^\s*[-−ー]\s*\d+)/i.test(compact))continue;
-  if(/(?:小計|合計|税|対象|お預|お釣)/.test(compact))continue;
-  const m=compact.match(/(?:[¥￥]\s*)?[-−]\s*([0-9]{1,6})\s*$/);
+ for(let i=0;i<lines.length;i++){
+  const line=String(lines[i]).replace(/[，,]/g,'').trim();
+  if(!/(?:割引|値引|C割|クーポン|ｸｰﾎﾟﾝ|M001\)|割\s*引|値\s*引)/i.test(line))continue;
+  if(/(?:小計|合計|税|対象|お預|お釣)/.test(line))continue;
+  let m=line.match(/[-−ー]\s*[¥￥]?\s*([0-9]{1,6})\s*$/);
+  if(!m)m=line.match(/[¥￥]\s*([0-9]{1,6})\s*$/);
+  if(!m&&i+1<lines.length)m=String(lines[i+1]).match(/^\s*[-−ー]?\s*[¥￥]?\s*([0-9]{1,6})\s*$/);
   if(m)total+=Number(m[1]);
  }
  return total;
@@ -652,7 +655,7 @@ const birthdayKnownCodes={
  '106-0896':'ボトムス','106-2698':'ボトムス','107-3496':'パンツ',
  '211-1098':'Tシャツ','211-8542':'Tシャツ','117-6651':'パンツ',
  '211-7525':'Tシャツ','214-1009':'シャツブラウス','211-7211':'Tシャツ',
- '212-2643':'トレーナー','881-0516':'ヨウヨウスキ'
+ '212-2643':'トレーナー','881-0516':'ヨコヨウスキ'
 };
 function parseStoreRowReceipt(lines,store){
  const parsed=[],excluded=[],diagnostics=[];
@@ -671,7 +674,7 @@ function parseStoreRowReceipt(lines,store){
    const cm=line.match(codePattern);
    if(!cm)continue; // 品番がない文字化け行は誤登録を防ぐ
    code=cm[1].replace(/\s/g,'');
-   const rest=line.slice(cm.index+cm[0].length).trim();
+   const rest=line.slice(cm.index+cm[0].length).trim().replace(/[\\|]/g,'¥');
    // 数量と金額が同じ行。¥が欠けても品番があれば認識する。
    match=rest.match(/^(.{1,65}?)\s+([1-9]|1[0-9])\s*¥?\s*(\d{2,6})\s*[;；]?\s*$/u);
    if(match){name=match[1];qty=Number(match[2]);amount=Number(match[3]);}
@@ -684,7 +687,19 @@ function parseStoreRowReceipt(lines,store){
     const price=next.match(/^(?:1\s*)?¥\s*(\d{2,6})\s*$/);
     if(price&&rest){name=rest.replace(/\s+1\s*$/,'');amount=Number(price[1]);match=price;i++;}
    }
-   if(!match){diagnostics.push('未抽出: '+raw);continue}
+   if(!match){
+    // 金額だけが次の行に分かれた場合も拾う。
+    const next=i+1<lines.length?normalize(lines[i+1]).replace(/[\\|]/g,'¥'):'';
+    const nextPrice=next.match(/(?:^|\s)¥\s*(\d{2,6})\s*$/);
+    if(nextPrice&&rest){name=rest.replace(/\s+1\s*$/,'');amount=Number(nextPrice[1]);match=nextPrice;i++;}
+   }
+   if(!match){
+    // OCRが金額を文字化けさせた場合、推測額を商品候補として表示し、必ず手動確認。
+    if(code==='881-0516'&&/[¥￥]\s*[a-z]{2,5}\s*$/i.test(rest)){
+     name=birthdayKnownCodes[code];amount=990;match=['OCR金額要確認'];
+     diagnostics.push('⚠️ 商品'+(parsed.length+1)+': '+raw+' → 金額が文字化け。990円は確認用の仮入力です。レシートで必ず確認してね');
+    }else{diagnostics.push('未抽出: '+raw);continue}
+   }
   }else if(store==='taiyo'){
    match=line.match(/^(?:[外内]\s*[810]\s*)?(\d{3,5})\s+(.+?)\s*¥\s*(\d{1,6})\s*$/);
    if(match){code=match[1];name=match[2];amount=Number(match[3]);}
@@ -711,6 +726,7 @@ function parseReceiptText(){
  const detected=detectReceiptAmounts(lines);
   receiptStoreHint=document.getElementById('receiptStoreSelect').value||(/バースデイ|birthday/i.test(raw)?'birthday':/西松屋/i.test(raw)?'nishimatsuya':/タイヨー|タイヨーネ/i.test(raw)?'taiyo':'');
   receiptDetectedDiscount=detectReceiptDiscount(lines);
+  document.getElementById('receiptDiscountInput').value=receiptDetectedDiscount;
   document.getElementById('receiptStoreSelect').value=receiptStoreHint;
  receiptDetectedTax=detected.tax;
  const totalInput=document.getElementById('receiptExpectedTotal');
