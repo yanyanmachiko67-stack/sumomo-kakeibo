@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>すもも家計簿 Ver.10.13（バースデイ品番・金額優先）</title>
+<title>すもも家計簿 Ver.10.14（支払総額OCR改善）</title>
 <style>
 :root{--pink:#e88ca8;--pink2:#f7dce5;--ink:#3d3438;--muted:#8b7d83;--bg:#fff8fa;--card:#fff;--line:#eadde2;--green:#79b89a;--blue:#8caed8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
@@ -27,7 +27,7 @@ h2{font-size:18px;margin:4px 0 12px} h3{font-size:15px;margin:4px 0 10px}
 </head>
 <body>
 <div class="app">
-  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.13（バースデイ品番・金額優先） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
+  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.14（支払総額OCR改善） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
   <nav>
     <button class="tab active" data-page="home">ホーム</button>
     <button class="tab" data-page="add">支出を追加</button>
@@ -605,15 +605,30 @@ function parseSeparatedPriceReceipt(lines,expected,isKidsStore){
  return {parsed,excluded};
 }
 function detectReceiptAmounts(lines){
+ // iPhone OCR sometimes reads 11,714 as "11 714" or "11.714".
+ // Only take totals from explicit payment/total rows, never product prices or tax rows.
  const candidates=[];let tax=0;
- for(const line of lines){
-  const m=line.replace(/[,，]/g,'').match(/[¥￥]\s*([0-9]{2,7})/);
-  if(!m)continue;const n=Number(m[1]);
-  if(/(?:外\s*税\s*(?:8|10)\s*%?|(?:8|10)\s*%\s*外\s*税|外\s*税\s*額|^ae[、,.]?\s*8%\s*外)/i.test(line)&&n<10000)tax=n;
-  if(/(?:合\s*計|お\s*支払|支払総額|クレジット|^a\s*[=＝]\s*ET|\bET\b)/i.test(line)&&n>=100) candidates.push(n);
+ const amountFrom=s=>{
+  const m=String(s).match(/[¥￥]\s*([0-9]{1,3}(?:[\s,，.．][0-9]{3})+|[0-9]{2,7})/);
+  if(!m)return 0;
+  const n=Number(m[1].replace(/[^0-9]/g,''));
+  return Number.isSafeInteger(n)?n:0;
+ };
+ for(let i=0;i<lines.length;i++){
+  const line=lines[i];
+  const normalized=line.replace(/[\s　]/g,'');
+  const n=amountFrom(line);
+  if(/(?:外税(?:8|10)%?|(?:8|10)%外税|外税額)/i.test(normalized)&&n>0&&n<10000)tax=n;
+  const payment=/(?:^|[^小])合計|お支払|支払総額|クレジット|掛売|お買上金額|お買い上げ金額|お支払い/i.test(normalized);
+  const summaryOnly=/(?:小計|税|対象額|内訳|点数|預り|お釣)/i.test(normalized);
+  if(payment&&!summaryOnly){
+   let amount=n;
+   if(!amount&&i+1<lines.length)amount=amountFrom(lines[i+1]);
+   if(amount>=100&&amount<=10000000)candidates.push({amount,priority:/^(?:合計|お支払|支払総額)/.test(normalized)?3:/クレジット|掛売/.test(normalized)?2:1,index:i});
+  }
  }
- const total=candidates.length?candidates[0]:0;
- return {total,tax};
+ candidates.sort((a,b)=>b.priority-a.priority||a.index-b.index);
+ return {total:candidates.length?candidates[0].amount:0,tax};
 }
 function receiptDefaultCategory(name,storeHint){
  if((storeHint==='birthday'||storeHint==='nishimatsuya')&&cats().some(c=>c.name==='子ども費'))return '子ども費';
