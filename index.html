@@ -645,6 +645,15 @@ function detectReceiptDiscount(lines){
  }
  return total;
 }
+// バースデイの品番に紐づく商品種別。OCRの文字化けより品番を優先する。
+// 同じ品番の別商品がある場合は登録前に必ず確認してね。
+const birthdayKnownCodes={
+ '116-1781':'ボトムス','211-7349':'Tシャツ','117-1351':'パンツ',
+ '106-0896':'ボトムス','106-2698':'ボトムス','107-3496':'パンツ',
+ '211-1098':'Tシャツ','211-8542':'Tシャツ','117-6651':'パンツ',
+ '211-7525':'Tシャツ','214-1009':'シャツブラウス','211-7211':'Tシャツ',
+ '212-2643':'トレーナー','881-0516':'ヨウヨウスキ'
+};
 function parseStoreRowReceipt(lines,store){
  const parsed=[],excluded=[],diagnostics=[];
  let boundary=false;
@@ -682,6 +691,7 @@ function parseStoreRowReceipt(lines,store){
   }
   if(!match||amount<1||amount>50000||qty<1||qty>30)continue;
   name=cleanName(name).replace(/^[-ー−‐–\s]+/,'');
+  if(store==='birthday'&&birthdayKnownCodes[code])name=birthdayKnownCodes[code];
   // 商品名はOCRが判読できない場合もある。品番・金額は保持して後から修正可能にする。
   const hasJapanese=/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(name);
   const placeholder=!name||/^(?:MM|yy|ToY|\d+|¥|特)$/i.test(name);
