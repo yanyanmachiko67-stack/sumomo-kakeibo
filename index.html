@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>すもも家計簿 Ver.10.16（商品取りこぼし・値引き改善）</title>
+<title>すもも家計簿 Ver.10.17（値引き自動読取の改善）</title>
 <style>
 :root{--pink:#e88ca8;--pink2:#f7dce5;--ink:#3d3438;--muted:#8b7d83;--bg:#fff8fa;--card:#fff;--line:#eadde2;--green:#79b89a;--blue:#8caed8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
@@ -27,7 +27,7 @@ h2{font-size:18px;margin:4px 0 12px} h3{font-size:15px;margin:4px 0 10px}
 </head>
 <body>
 <div class="app">
-  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.16（商品取りこぼし・値引き改善） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
+  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.17（値引き自動読取の改善） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
   <nav>
     <button class="tab active" data-page="home">ホーム</button>
     <button class="tab" data-page="add">支出を追加</button>
@@ -636,15 +636,25 @@ function receiptDefaultCategory(name,storeHint){
  return guessedCategory(name);
 }
 function detectReceiptDiscount(lines){
+ // 値引き明細のみ対象。支払・税額・商品金額を値引きと誤認しない。
  let total=0;
  for(let i=0;i<lines.length;i++){
   const line=String(lines[i]).replace(/[，,]/g,'').trim();
-  if(!/(?:割引|値引|C割|クーポン|ｸｰﾎﾟﾝ|M001\)|割\s*引|値\s*引)/i.test(line))continue;
-  if(/(?:小計|合計|税|対象|お預|お釣)/.test(line))continue;
-  let m=line.match(/[-−ー]\s*[¥￥]?\s*([0-9]{1,6})\s*$/);
-  if(!m)m=line.match(/[¥￥]\s*([0-9]{1,6})\s*$/);
-  if(!m&&i+1<lines.length)m=String(lines[i+1]).match(/^\s*[-−ー]?\s*[¥￥]?\s*([0-9]{1,6})\s*$/);
-  if(m)total+=Number(m[1]);
+  const isDiscount=/(?:割\s*引|値\s*引|C割|クーポン|ｸｰﾎﾟﾝ|M001\)|CHI\s*\(\s*0?1\s*\))/i.test(line);
+  if(!isDiscount||/(?:小計|合計|消費税|対象税額|お預|お釣)/.test(line))continue;
+  // ¥-100、-¥100、￥−１００、¥100 の順に対応。最後の金額を採用。
+  const normalized=line.normalize('NFKC').replace(/[−ー‐‑–—]/g,'-');
+  let matches=[...normalized.matchAll(/[¥￥]\s*-\s*(\d{1,6})(?!\d)|-\s*[¥￥]\s*(\d{1,6})(?!\d)/g)];
+  if(matches.length){const m=matches[matches.length-1];total+=Number(m[1]||m[2]);continue;}
+  // 値引きラベルと同じ行にある正の金額は明示的な値引きとして扱う。
+  const plain=normalized.match(/[¥￥]\s*(\d{1,6})\s*$/);
+  if(plain){total+=Number(plain[1]);continue;}
+  // 別行の金額はマイナス表記の場合だけ採用。
+  if(i+1<lines.length){
+   const next=String(lines[i+1]).normalize('NFKC').replace(/[−ー‐‑–—]/g,'-').trim();
+   const m=next.match(/^(?:[¥￥]\s*-|-\s*[¥￥]?)\s*(\d{1,6})\s*$/);
+   if(m)total+=Number(m[1]);
+  }
  }
  return total;
 }
