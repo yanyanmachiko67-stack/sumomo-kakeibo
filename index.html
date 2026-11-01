@@ -606,29 +606,37 @@ function parseSeparatedPriceReceipt(lines,expected,isKidsStore){
  return {parsed,excluded};
 }
 function detectReceiptAmounts(lines){
- // iPhone OCR sometimes reads 11,714 as "11 714" or "11.714".
- // Only take totals from explicit payment/total rows, never product prices or tax rows.
+ // OCR can split thousands separators, currency symbols and the total label.
+ // Restrict automatic payment detection to explicit total/payment rows.
  const candidates=[];let tax=0;
- const amountFrom=s=>{
-  const m=String(s).match(/[¥￥]\s*([0-9]{1,3}(?:[\s,，.．][0-9]{3})+|[0-9]{2,7})/);
+ const amountFrom=(source,allowBare=false)=>{
+  const text=String(source).normalize('NFKC').replace(/[，、．]/g,',').replace(/[\u00a0\u3000]/g,' ');
+  const pattern=allowBare?/(?:[¥￥]\s*)?([0-9]{1,3}(?:\s*[, .]\s*[0-9]{3})+|[0-9]{3,7})(?![0-9])/:/[¥￥]\s*([0-9]{1,3}(?:\s*[, .]\s*[0-9]{3})+|[0-9]{2,7})(?![0-9])/;
+  const m=text.match(pattern);
   if(!m)return 0;
   const n=Number(m[1].replace(/[^0-9]/g,''));
-  return Number.isSafeInteger(n)?n:0;
+  return Number.isSafeInteger(n)&&n>=1&&n<=10000000?n:0;
  };
  for(let i=0;i<lines.length;i++){
-  const line=lines[i];
+  const line=String(lines[i]).normalize('NFKC');
   const normalized=line.replace(/[\s　]/g,'');
   const n=amountFrom(line);
   if(/(?:外税(?:8|10)%?|(?:8|10)%外税|外税額)/i.test(normalized)&&n>0&&n<10000)tax=n;
   const payment=/(?:^|[^小])合計|お支払|支払総額|クレジット|掛売|お買上金額|お買い上げ金額|お支払い/i.test(normalized);
   const summaryOnly=/(?:小計|税|対象額|内訳|点数|預り|お釣)/i.test(normalized);
-  if(payment&&!summaryOnly){
-   let amount=n;
-   if(!amount&&i+1<lines.length)amount=amountFrom(lines[i+1]);
-   if(amount>=100&&amount<=10000000)candidates.push({amount,priority:/^(?:合計|お支払|支払総額)/.test(normalized)?3:/クレジット|掛売/.test(normalized)?2:1,index:i});
+  if(!payment||summaryOnly)continue;
+  // A bare number is safe here because the label identifies a payment row.
+  let amount=n||amountFrom(line,true);
+  if(!amount&&i+1<lines.length){
+   const next=String(lines[i+1]);
+   if(!/(?:小計|消費税|対象|割引|値引)/.test(next))amount=amountFrom(next)||amountFrom(next,true);
+  }
+  if(amount>=100&&amount<=10000000){
+   const priority=/^(?:合計|お支払|支払総額)/.test(normalized)?3:/クレジット|掛売/.test(normalized)?2:1;
+   candidates.push({amount,priority,index:i});
   }
  }
- candidates.sort((a,b)=>b.priority-a.priority||a.index-b.index);
+ candidates.sort((a,b)=>b.priority-a.priority||b.index-a.index);
  return {total:candidates.length?candidates[0].amount:0,tax};
 }
 function receiptDefaultCategory(name,storeHint){
