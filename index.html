@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>すもも家計簿 Ver.10.23（タイヨー未抽出候補の表示）</title>
+<title>すもも家計簿 Ver.10.24（タイヨー支払総額の読み取り改善）</title>
 <style>
 :root{--pink:#e88ca8;--pink2:#f7dce5;--ink:#3d3438;--muted:#8b7d83;--bg:#fff8fa;--card:#fff;--line:#eadde2;--green:#79b89a;--blue:#8caed8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
@@ -27,7 +27,7 @@ h2{font-size:18px;margin:4px 0 12px} h3{font-size:15px;margin:4px 0 10px}
 </head>
 <body>
 <div class="app">
-  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.23（タイヨー未抽出候補の表示） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
+  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.24（タイヨー支払総額の読み取り改善） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
   <nav>
     <button class="tab active" data-page="home">ホーム</button>
     <button class="tab" data-page="add">支出を追加</button>
@@ -608,55 +608,59 @@ function parseSeparatedPriceReceipt(lines,expected,isKidsStore){
  return {parsed,excluded};
 }
 function detectReceiptAmounts(lines){
- // OCR can split thousands separators, currency symbols and the total label.
- // Restrict automatic payment detection to explicit total/payment rows.
- const candidates=[];let tax=0;
- const amountFrom=(source,allowBare=false)=>{
-  const text=String(source).normalize('NFKC').replace(/[，、．]/g,',').replace(/[\u00a0\u3000]/g,' ');
-  const pattern=allowBare?/(?:[¥￥]\s*)?([0-9]{1,3}(?:\s*[, .]\s*[0-9]{3})+|[0-9]{3,7})(?![0-9])/:/[¥￥]\s*([0-9]{1,3}(?:\s*[, .]\s*[0-9]{3})+|[0-9]{2,7})(?![0-9])/;
-  const m=text.match(pattern);
-  if(!m)return 0;
-  const n=Number(m[1].replace(/[^0-9]/g,''));
-  return Number.isSafeInteger(n)&&n>=1&&n<=10000000?n:0;
+ // 支払総額は「合計」「決済方法」の行を優先。OCRの文字化けにも対応。
+ const candidates=[];
+ let tax=0;
+ const moneyValues=(row,allowBare=false)=>{
+  const t=String(row).normalize('NFKC');
+  const re=/[¥￥]\s*([1-9]\d{0,2}(?:\s*[,，.．]\s*\d{3})+|[1-9]\d{1,6})(?!\d)/g;
+  const values=[...t.matchAll(re)].map(m=>Number(m[1].replace(/\D/g,''))).filter(n=>n>=1&&n<=10000000);
+  if(values.length||!allowBare)return values;
+  const bare=[...t.matchAll(/(?:^|[^\d])([1-9]\d{0,2}(?:\s*[,，.．]\s*\d{3})+|[1-9]\d{2,6})(?!\d)/g)]
+    .map(m=>Number(m[1].replace(/\D/g,''))).filter(n=>n>=100&&n<=10000000);
+  return bare;
  };
+ const compact=s=>String(s).normalize('NFKC').replace(/[\s　]/g,'');
+ const paymentLabel=/(?:合計|お支払|支払総額|お買上金額|お買い上げ金額|クレジット|クレジツト|クレジッ卜|掛売|クレ.{0,5}ジ.{0,6}ト|クレ.{0,6}シ.{0,7}ト|(?:^|[=＝])(?:Et|E[tｔ])(?=[¥￥]))/i;
+ const summaryLabel=/(?:小計|外税|内税|消費税|税率|税額|対象額|内訳|買上点数|お買上点数|お預|お釣|値引|割引)/;
+ let summaryStart=-1;
  for(let i=0;i<lines.length;i++){
-  const line=String(lines[i]).normalize('NFKC');
-  const normalized=line.replace(/[\s　]/g,'');
-  const n=amountFrom(line);
-  if(/(?:外税(?:8|10)%?|(?:8|10)%外税|外税額)/i.test(normalized)&&n>0&&n<10000)tax=n;
-  const payment=/(?:^|[^小])合計|(?:^|[\s、,])(?:=\s*)?(?:Et|E[tｔ]|計)\s*[¥￥]|合[言亠][十計]|お支払|支払総額|クレジット|クレジツト|クレジッ卜|クレジツ卜|クレジツ卜|クレジツ卜|クレジッ卜|掛売|お買上金額|お買い上げ金額|お支払い|クレジ.{0,5}ト|クレ.{0,4}ジ.{0,4}ト/i.test(normalized);
-  const summaryOnly=/(?:小計|税|対象額|内訳|点数|預り|お釣)/i.test(normalized);
-  if(!payment||summaryOnly)continue;
-  // A bare number is safe here because the label identifies a payment row.
-  let amount=n||amountFrom(line,true);
-  // Prefer the rightmost currency value on a payment line, not a register number.
-  const monetary=[...line.normalize('NFKC').matchAll(/[¥￥]\s*([0-9]{1,3}(?:[\s,，.．]*[0-9]{3})+|[0-9]{3,7})/g)];
-  if(monetary.length)amount=Number(monetary[monetary.length-1][1].replace(/\D/g,''));
-  if(!amount&&i+1<lines.length){
-   const next=String(lines[i+1]);
-   if(!/(?:小計|消費税|対象|割引|値引)/.test(next))amount=amountFrom(next)||amountFrom(next,true);
+  const row=String(lines[i]), t=compact(row);
+  if(summaryStart<0&&/(?:小計|外税|内税|消費税|買上点数|お買上点数|税額)/.test(t))summaryStart=i;
+  const values=moneyValues(row);
+  if(/(?:外税(?:8|10)%?|(?:8|10)%外税|外税額)/i.test(t)&&values.length){
+   const v=values[values.length-1];if(v<10000)tax=v;
   }
-  if(amount>=100&&amount<=10000000){
-   const priority=/^(?:合計|お支払|支払総額)/.test(normalized)?3:/クレジット|掛売/.test(normalized)?2:1;
-   candidates.push({amount,priority,index:i});
+  if(!paymentLabel.test(t)||summaryLabel.test(t))continue;
+  let amounts=values.length?values:moneyValues(row,true);
+  if(!amounts.length&&i+1<lines.length&&!summaryLabel.test(compact(lines[i+1]))){
+   amounts=moneyValues(lines[i+1]);
   }
+  if(!amounts.length)continue;
+  const amount=amounts[amounts.length-1];
+  if(amount<100)continue;
+  const priority=/(?:合計|支払総額|お支払)/.test(t)?4:/クレ|掛売/.test(t)?3:2;
+  candidates.push({amount,priority,index:i});
  }
- // タイヨーの「合計」が文字化けしても、集計欄以降で同額が2回
- // （合計とクレジット）出る場合だけ支払総額候補として扱う。
- if(!candidates.length){
-  const start=lines.findIndex(x=>/小\s*計|外\s*税\s*8|外税額|買上点数/.test(String(x).replace(/\s/g,'')));
-  if(start>=0){
-   const seen=new Map();
-   for(let i=start+1;i<lines.length;i++){
-    const row=String(lines[i]);
-    const values=[...row.matchAll(/[¥￥]\s*([1-9]\d{0,2}(?:[,，.．]\s*\d{3})+|[1-9]\d{3,5})(?!\d)/g)];
-    for(const m of values){
-     const n=Number(m[1].replace(/\D/g,''));
-     if(n>=1000&&n<=100000){seen.set(n,(seen.get(n)||0)+1);}
-    }
+ // 「へ、=Et ¥7.572」「こき S き 瘡 クレ シテ トット ¥7,572」など
+ // 見出しが壊れても、集計欄以降に同じ金額が2度あれば候補にする。
+ if(summaryStart>=0){
+  const seen=new Map();
+  for(let i=summaryStart+1;i<lines.length;i++){
+   for(const n of moneyValues(lines[i])){
+    if(n<1000||n>100000)continue;
+    const prev=seen.get(n)||[];
+    prev.push(i);seen.set(n,prev);
    }
-   const repeats=[...seen].filter(([n,count])=>count>=2).sort((a,b)=>b[0]-a[0]);
-   if(repeats.length===1)candidates.push({amount:repeats[0][0],priority:0,index:lines.length});
+  }
+  const repeated=[...seen].filter(([n,indices])=>new Set(indices).size>=2);
+  if(repeated.length===1){
+   const [amount,indices]=repeated[0];
+   // 金額の繰り返しが明示的な決済欄と矛盾しないときに限る。
+   const explicit=candidates.filter(c=>c.priority>=3);
+   if(!explicit.length||explicit.some(c=>c.amount===amount)){
+    candidates.push({amount,priority:explicit.length?3:1,index:indices[indices.length-1]});
+   }
   }
  }
  candidates.sort((a,b)=>b.priority-a.priority||b.index-a.index);
