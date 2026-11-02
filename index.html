@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>すもも家計簿 Ver.10.21（タイヨー商品抽出改善）</title>
+<title>すもも家計簿 Ver.10.22（タイヨー商品抽出改善）</title>
 <style>
 :root{--pink:#e88ca8;--pink2:#f7dce5;--ink:#3d3438;--muted:#8b7d83;--bg:#fff8fa;--card:#fff;--line:#eadde2;--green:#79b89a;--blue:#8caed8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
@@ -27,7 +27,7 @@ h2{font-size:18px;margin:4px 0 12px} h3{font-size:15px;margin:4px 0 10px}
 </head>
 <body>
 <div class="app">
-  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.21（タイヨー商品抽出改善） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
+  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.22（タイヨー商品抽出改善） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
   <nav>
     <button class="tab active" data-page="home">ホーム</button>
     <button class="tab" data-page="add">支出を追加</button>
@@ -141,7 +141,7 @@ h2{font-size:18px;margin:4px 0 12px} h3{font-size:15px;margin:4px 0 10px}
           <small id="receiptTotalSourceNote" class="muted" style="display:block;margin-top:5px"></small><small class="muted">支払総額は読み取れた場合に自動入力するよ。商品金額が税抜の場合は、認識した外税をカテゴリ別に配分して照合するよ。必ずレシートと見比べてね。</small>
         </div>
         <div style="margin:10px 0"><label for="receiptStoreSelect">🏬 店舗（OCRで違ったら選んでね）</label><select id="receiptStoreSelect" onchange="changeReceiptStore(this.value)"><option value="">自動判定・その他</option><option value="taiyo">タイヨー</option><option value="birthday">バースデイ</option><option value="nishimatsuya">西松屋</option></select></div><div id="ocrItems" class="list"></div>
-        <div id="ocrExcluded" style="margin-top:10px"></div>
+        <div id="ocrExcluded" style="margin-top:10px"></div><div id="ocrUnmatched" style="margin-top:12px"></div>
         <div style="margin-top:12px;padding:12px;border:1px solid #edc4d0;border-radius:12px"><label for="receiptDiscountInput">🏷️ レシートの値引き合計（円・確認して変更できるよ）</label><input id="receiptDiscountInput" type="number" min="0" step="1" inputmode="numeric" value="0" oninput="receiptDetectedDiscount=Math.max(0,Number(this.value)||0);updateReceiptTotal()"><small class="muted">値引きが読み取れた場合は自動入力。読み取れなければレシートの金額を入力してね。</small></div>
         <details id="ocrDiagnostic" style="margin-top:12px;padding:12px;border:1px solid #edc4d0;border-radius:12px"><summary style="cursor:pointer;font-weight:700">🔍 商品名の読み取り診断（テスト用）</summary><p class="muted" style="font-size:12px">商品名を探した前後の文字だけ表示するよ。個人情報が含まれることもあるので、スクショを送る前に確認してね。</p><div id="ocrDiagnosticBody" style="font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere"></div></details>
         <div class="actions"><button class="btn secondary" onclick="addReceiptItem()">＋ 商品を追加</button></div>
@@ -423,6 +423,7 @@ function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&l
 // Ver.8 receipt OCR prototype. Images stay in the browser; Tesseract JS is loaded on demand.
 let receiptItems=[];
 let receiptExcluded=[];
+let receiptUnmatched=[];
 let receiptObjectURL=null;
 function receiptStatus(message){document.getElementById('ocrStatus').textContent=message}
 function previewReceipt(){
@@ -681,6 +682,7 @@ const birthdayKnownCodes={
 };
 function parseStoreRowReceipt(lines,store){
  const parsed=[],excluded=[],diagnostics=[];
+ receiptUnmatched=[];
  let boundary=false;
  const summary=/(?:小\s*計|合\s*計|内\s*消費税|外\s*税|税\s*率|対象額|お\s*預|お\s*釣|クレジット|カード会社|掛売|点数|支払|お買上|買上点数|消費税|10%\s*対象|8%\s*対象)/i;
  const discount=/(?:C割|値引|割引|クーポン|M001\)|^\s*CHI\(|^\s*FR\s*\d+)/i;
@@ -739,6 +741,20 @@ function parseStoreRowReceipt(lines,store){
     }
    }
   }
+  if(store==='taiyo' && (!match||amount<1||amount>50000||qty<1||qty>30)){
+   // Keep plausible item rows for review instead of silently dropping them.
+   const probe=line.normalize('NFKC').match(/^\s*[外内下力]\s*(?:8|10)\s*(.*)$/u);
+   if(probe){
+    const fragment=probe[1].replace(/^(?:0\s*)?\d{3,4}\s+/,'').trim();
+    if(fragment && /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(fragment) && !summary.test(fragment)){
+     const tail=fragment.match(/(?:[¥￥\\|]\s*|\s+)(\d{2,5})\s*[;；。.]?$/u);
+     const guess=tail?Number(tail[1]):0;
+     const candidateName=tail?fragment.slice(0,tail.index).trim():fragment;
+     receiptUnmatched.push({name:candidateName||fragment,amount:guess,raw});
+    }
+   }
+   continue;
+  }
   if(!match||amount<1||amount>50000||qty<1||qty>30)continue;
   name=cleanName(name).replace(/^[-ー−‐–\s]+/,'');
   if(store==='birthday'&&birthdayKnownCodes[code])name=birthdayKnownCodes[code];
@@ -757,7 +773,7 @@ function parseReceiptText(){
  const raw=document.getElementById('ocrRaw').value;
  const lines=raw.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
  const parsed=[],excluded=[];
- receiptNameDiagnostics=[];
+ receiptNameDiagnostics=[];receiptUnmatched=[];
  const diag=document.getElementById("ocrDiagnosticBody");if(diag)diag.textContent="このレシートでは単価×数量の形式を検出していないよ。";
  const detected=detectReceiptAmounts(lines);
  // 金額は明示的な合計・クレジット行を優先。読み取れないときは
@@ -892,10 +908,20 @@ function renderReceiptExcluded(){
  if(!el)return;
  el.innerHTML=receiptExcluded.length?`<details><summary style="cursor:pointer;font-weight:700">🔎 商品から除外した候補（${receiptExcluded.length}件）を確認</summary><p class="muted" style="font-size:12px">誤って除外した商品は「商品に戻す」を押してね。</p>${receiptExcluded.map((r,i)=>`<div class="row" style="gap:8px;margin:8px 0"><span style="font-size:12px;flex:1;overflow-wrap:anywhere">${esc(r.name)} ${yen(r.amount)}<br><small>${esc(r.reason)}</small></span><button class="btn secondary" onclick="restoreExcludedReceiptItem(${i})">商品に戻す</button></div>`).join('')}</details>`:'';
 }
+function addUnmatchedReceiptItem(i){
+ const r=receiptUnmatched[i];if(!r)return;
+ receiptItems.push({name:r.name,amount:r.amount||0,category:receiptDefaultCategory(r.name,receiptStoreHint)});
+ receiptUnmatched.splice(i,1);renderReceiptItems();
+}
+function renderReceiptUnmatched(){
+ const el=document.getElementById('ocrUnmatched');if(!el)return;
+ el.innerHTML=receiptUnmatched.length?`<details open><summary style="font-weight:700;cursor:pointer">🧺 一覧に反映されなかった商品候補（${receiptUnmatched.length}件）</summary><p class="muted" style="font-size:12px">金額が不明な行も残したよ。「商品に追加」で一覧に移して、金額をレシートと確認してね。商品以外の文字が混じることもあるよ。</p>${receiptUnmatched.map((r,i)=>`<div class="item" style="gap:8px;margin-top:7px"><div style="flex:1;min-width:0;overflow-wrap:anywhere"><strong>${esc(r.name)}</strong><br><small>${r.amount?yen(r.amount):'金額を確認してね'} · ${esc(r.raw)}</small></div><button class="btn secondary" onclick="addUnmatchedReceiptItem(${i})">＋追加</button></div>`).join('')}</details>`:'';
+}
 function renderReceiptItems(){
  const el=document.getElementById('ocrItems');
  el.innerHTML=receiptItems.length?receiptItems.map((r,i)=>`<div class="card" style="margin:0;padding:10px;background:var(--bg)"><div class="formgrid" style="gap:7px"><div><label>商品名</label><input value="${esc(r.name)}" oninput="receiptItems[${i}].name=this.value">${Array.isArray(r.candidates)&&r.candidates.length?`<details style="margin-top:7px"><summary style="cursor:pointer;font-size:13px;color:#a34c72;font-weight:700">🔍 候補から選ぶ（${r.candidates.length}件）</summary><div class="list" style="margin-top:8px">${r.candidates.map((name,k)=>`<button type="button" class="btn secondary" style="text-align:left;white-space:normal;overflow-wrap:anywhere;font-weight:500" onclick="selectReceiptCandidate(${i},${k})">${esc(name)}</button>`).join('')}</div><small class="muted">文字化けがあれば上の商品名欄で直せるよ</small></details>`:''}</div><div><label>税込金額（円）</label><input type="number" min="0" step="1" inputmode="numeric" value="${esc(r.amount)}" oninput="receiptItems[${i}].amount=Number(this.value);updateReceiptTotal()"></div><div><label>カテゴリ</label><select onchange="receiptItems[${i}].category=this.value">${cats().map(c=>`<option value="${esc(c.name)}" ${r.category===c.name?'selected':''}>${esc(c.name)}</option>`).join('')}</select></div><div style="display:flex;align-items:end"><button class="btn secondary" style="width:100%" onclick="receiptItems.splice(${i},1);renderReceiptItems()">削除</button></div></div></div>`).join(''):'<div class="empty">商品がまだないよ。追加してね 🌷</div>';
  renderReceiptExcluded();
+ renderReceiptUnmatched();
  updateReceiptTotal();
 }
 function receiptReconciled(){
