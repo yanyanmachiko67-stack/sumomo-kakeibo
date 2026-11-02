@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>すもも家計簿 Ver.10.27（支払総額の桁落ち対策）</title>
+<title>すもも家計簿 Ver.10.28（合計欄の文字化け対策）</title>
 <style>
 :root{--pink:#e88ca8;--pink2:#f7dce5;--ink:#3d3438;--muted:#8b7d83;--bg:#fff8fa;--card:#fff;--line:#eadde2;--green:#79b89a;--blue:#8caed8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
@@ -27,7 +27,7 @@ h2{font-size:18px;margin:4px 0 12px} h3{font-size:15px;margin:4px 0 10px}
 </head>
 <body>
 <div class="app">
-  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.27（支払総額の桁落ち対策） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
+  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.28（合計欄の文字化け対策） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
   <nav>
     <button class="tab active" data-page="home">ホーム</button>
     <button class="tab" data-page="add">支出を追加</button>
@@ -688,6 +688,42 @@ function detectReceiptAmounts(lines){
   const full=candidates.filter(c=>c.amount>=1000&&c.amount%1000===chosen&&c.priority>=3);
   const amounts=[...new Set(full.map(c=>c.amount))];
   if(amounts.length===1)chosen=amounts[0];
+ }
+ // 文字化けで「合計」の文字が消えていても、末尾で繰り返される
+ // 同額の4桁以上の金額は支払額の有力候補として扱う。
+ if(chosen>=100 && chosen<1000){
+  const tailStart=Math.floor(lines.length*.68);
+  const hits=new Map();
+  for(let i=tailStart;i<lines.length;i++){
+   for(const amount of new Set(moneyValues(lines[i]))){
+    if(amount<1000||amount>100000||amount%1000!==chosen)continue;
+    const indices=hits.get(amount)||new Set();indices.add(i);hits.set(amount,indices);
+   }
+  }
+  const repeated=[...hits].filter(([amount,indices])=>indices.size>=2);
+  if(repeated.length===1)chosen=repeated[0][0];
+ }
+ // OCRで合計の見出しが壊れたときも、レシート末尾の金額を照合する。
+ // 例: 合計が「¥572」と誤読され、末尾の決済欄に「¥7.572」が残る場合。
+ // 単なる商品価格を合計にしないよう、末尾の集計領域に限定する。
+ if(chosen>=100 && chosen<1000){
+  const start=Math.max(0,Math.floor(lines.length*0.65));
+  const tail=[];
+  for(let i=start;i<lines.length;i++){
+   const row=String(lines[i]);
+   for(const amount of new Set(moneyValues(row))){
+    if(amount>=1000&&amount<=100000&&amount%1000===chosen){
+     tail.push({amount,index:i,summary:/(?:合計|支払|クレ|掛売|カード|[=＝]\s*Et)/i.test(compact(row))});
+    }
+   }
+  }
+  const possible=[...new Set(tail.map(x=>x.amount))];
+  if(possible.length===1){
+   const amount=possible[0], hits=tail.filter(x=>x.amount===amount);
+   const late=hits.some(x=>x.index>=Math.floor(lines.length*.82));
+   const repeated=new Set(hits.map(x=>x.index)).size>=2;
+   if(repeated || (late && hits.some(x=>x.summary))){chosen=amount;}
+  }
  }
  return {total:chosen,tax};
 }
