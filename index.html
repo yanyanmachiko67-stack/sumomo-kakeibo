@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>すもも家計簿 Ver.10.24（タイヨー支払総額の読み取り改善）</title>
+<title>すもも家計簿 Ver.10.25（タイヨー未抽出行の確認改善）</title>
 <style>
 :root{--pink:#e88ca8;--pink2:#f7dce5;--ink:#3d3438;--muted:#8b7d83;--bg:#fff8fa;--card:#fff;--line:#eadde2;--green:#79b89a;--blue:#8caed8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
@@ -27,7 +27,7 @@ h2{font-size:18px;margin:4px 0 12px} h3{font-size:15px;margin:4px 0 10px}
 </head>
 <body>
 <div class="app">
-  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.24（タイヨー支払総額の読み取り改善） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
+  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.25（タイヨー未抽出行の確認改善） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
   <nav>
     <button class="tab active" data-page="home">ホーム</button>
     <button class="tab" data-page="add">支出を追加</button>
@@ -771,6 +771,19 @@ function parseStoreRowReceipt(lines,store){
     }
    }
   }
+  // 価格が行末に付かないOCR行も、消さずに確認候補へ残す。
+  // ただし日時・集計欄・明らかな管理情報は候補にしない。
+  if(store==='taiyo' && !match && !summary.test(line) && !discount.test(line)){
+   const normalized=line.normalize('NFKC');
+   const taxRow=normalized.match(/^\s*[外内下力]\s*(?:8|10)\s+(.+)$/u);
+   const codedRow=normalized.match(/^\s*\d{3,4}\s+(.+)$/u);
+   const body=(taxRow||codedRow)?.[1]||'';
+   if(body && /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(body) &&
+      !/(?:20\d{2}|\d{1,2}[:：]\d{2}|#\d{4,}|電話|TEL|領収|担当|登録|お買上|お預|お釣|点数)/i.test(body) &&
+      !receiptUnmatched.some(r=>r.raw===raw)){
+    receiptUnmatched.push({name:body.replace(/^\d{3,4}\s+/,'').replace(/[¥￥\\|]\s*\d{0,1}\s*$/,'').trim(),amount:0,raw});
+   }
+  }
   if(store==='taiyo' && (!match||amount<1||amount>50000||qty<1||qty>30)){
    // Keep plausible item rows for review instead of silently dropping them.
    const probe=line.normalize('NFKC').match(/^\s*[外内下力]\s*(?:8|10)\s*(.*)$/u) || line.normalize('NFKC').match(/^\s*(\d{3,4}\s+.+)$/u);
@@ -1000,6 +1013,10 @@ function updateReceiptTotal(){
  const amountMatches=valid&&total===expected;
  const status=document.getElementById('ocrCheck');
  status.textContent=!valid?'⚠️ レシートの税込支払総額を入力してね':receiptTotalEstimated&&amountMatches?'⚠️ 支払総額は商品合計からの推定だよ。レシートと照合してね（入力欄で修正できるよ）':matches?'✅ 金額一致！商品名とカテゴリを確認して反映できるよ':amountMatches?'⚠️ 金額は一致したよ！「商品名を確認してね」を修正してね':`⚠️ 金額が一致しないよ（${yen(Math.abs(expected-total))} ${total>expected?'多い':'少ない'}よ）。税・値引き・数量を確認してね`;
+ if(valid && expected-total>=500 && receiptStoreHint==='taiyo'){
+  status.textContent+='\n🧺 OCRが商品行を読み飛ばした可能性があるよ。上の「一覧に反映されなかった商品候補」を確認して、なければ「＋ 商品を追加」で補ってね。差額を架空の商品として自動追加はしないよ。';
+ }
+ status.style.whiteSpace='pre-line';
  status.style.color=matches&&!receiptTotalEstimated?'#25724b':'#ad3457';
  const btn=document.getElementById('applyOcrButton');if(btn)btn.disabled=!matches;
  const note=document.getElementById('receiptTotalSourceNote');if(note)note.textContent=receiptTotalEstimated?'⚠️ この金額はOCRで直接読み取れず、商品合計・値引き・外税から計算した候補だよ。必ずレシートの支払総額と比べてね。':receiptAutoTotal?'✅ レシートの合計欄から読み取った候補だよ。金額を確認してね。':'';
