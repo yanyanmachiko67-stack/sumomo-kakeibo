@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>すもも家計簿 Ver.10.22（タイヨー商品抽出改善）</title>
+<title>すもも家計簿 Ver.10.23（タイヨー未抽出候補の表示）</title>
 <style>
 :root{--pink:#e88ca8;--pink2:#f7dce5;--ink:#3d3438;--muted:#8b7d83;--bg:#fff8fa;--card:#fff;--line:#eadde2;--green:#79b89a;--blue:#8caed8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
@@ -27,7 +27,7 @@ h2{font-size:18px;margin:4px 0 12px} h3{font-size:15px;margin:4px 0 10px}
 </head>
 <body>
 <div class="app">
-  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.22（タイヨー商品抽出改善） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
+  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.23（タイヨー未抽出候補の表示） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
   <nav>
     <button class="tab active" data-page="home">ホーム</button>
     <button class="tab" data-page="add">支出を追加</button>
@@ -728,9 +728,11 @@ function parseStoreRowReceipt(lines,store){
    // タイヨー: OCRは「¥」を「\」「|」「空白」に読み違える。
    // 外8 / 内10などの税区分で始まる行だけを対象にする。
    const taiyo=line.normalize('NFKC').replace(/[，,]/g,'').replace(/[￥]/g,'¥');
-   const head=taiyo.match(/^\s*[外内下力]\s*(?:8|８|10|１０)\s*(.*)$/u);
-   if(head){
-    let body=head[1].trim();
+   // OCRが税区分を落とした商品（例: 301 小松菜 ¥138）も候補にする。
+   const head=taiyo.match(/^\s*[外内下力]\s*(?:8|10)\s*(.*)$/u);
+   const bare=taiyo.match(/^\s*(\d{3,4})\s+(.+)$/u);
+   if(head||bare){
+    let body=(head?head[1]:bare[0]).trim();
     // 先頭の商品分類コード。OCRでは 0303 / 0 303 / 8 0303 などに崩れる。
     const codeMatch=body.match(/^(?:0\s*)?(\d{3,4})\s+(.+)$/u);
     if(codeMatch){code=codeMatch[1];body=codeMatch[2];}
@@ -738,19 +740,22 @@ function parseStoreRowReceipt(lines,store){
     const priceMatch=body.match(/^(.+?)\s*(?:[¥￥\\|]\s*|\s+)(\d{2,5})\s*[;；。.]?\s*$/u);
     if(priceMatch){
      name=priceMatch[1].trim();amount=Number(priceMatch[2]);match=priceMatch;
+    }else if(bare){
+     // 金額が文字化けした行も候補として残し、手入力で修正できるようにする。
+     receiptUnmatched.push({name:body.replace(/^\d{3,4}\s+/,'').trim(),amount:0,raw});
     }
    }
   }
   if(store==='taiyo' && (!match||amount<1||amount>50000||qty<1||qty>30)){
    // Keep plausible item rows for review instead of silently dropping them.
-   const probe=line.normalize('NFKC').match(/^\s*[外内下力]\s*(?:8|10)\s*(.*)$/u);
+   const probe=line.normalize('NFKC').match(/^\s*[外内下力]\s*(?:8|10)\s*(.*)$/u) || line.normalize('NFKC').match(/^\s*(\d{3,4}\s+.+)$/u);
    if(probe){
     const fragment=probe[1].replace(/^(?:0\s*)?\d{3,4}\s+/,'').trim();
     if(fragment && /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(fragment) && !summary.test(fragment)){
      const tail=fragment.match(/(?:[¥￥\\|]\s*|\s+)(\d{2,5})\s*[;；。.]?$/u);
      const guess=tail?Number(tail[1]):0;
      const candidateName=tail?fragment.slice(0,tail.index).trim():fragment;
-     receiptUnmatched.push({name:candidateName||fragment,amount:guess,raw});
+     if(!receiptUnmatched.some(x=>x.raw===raw))receiptUnmatched.push({name:candidateName||fragment,amount:guess,raw});
     }
    }
    continue;
