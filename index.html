@@ -641,6 +641,24 @@ function detectReceiptAmounts(lines){
    candidates.push({amount,priority,index:i});
   }
  }
+ // タイヨーの「合計」が文字化けしても、集計欄以降で同額が2回
+ // （合計とクレジット）出る場合だけ支払総額候補として扱う。
+ if(!candidates.length){
+  const start=lines.findIndex(x=>/小\s*計|外\s*税\s*8|外税額|買上点数/.test(String(x).replace(/\s/g,'')));
+  if(start>=0){
+   const seen=new Map();
+   for(let i=start+1;i<lines.length;i++){
+    const row=String(lines[i]);
+    const values=[...row.matchAll(/[¥￥]\s*([1-9]\d{0,2}(?:[,，.．]\s*\d{3})+|[1-9]\d{3,5})(?!\d)/g)];
+    for(const m of values){
+     const n=Number(m[1].replace(/\D/g,''));
+     if(n>=1000&&n<=100000){seen.set(n,(seen.get(n)||0)+1);}
+    }
+   }
+   const repeats=[...seen].filter(([n,count])=>count>=2).sort((a,b)=>b[0]-a[0]);
+   if(repeats.length===1)candidates.push({amount:repeats[0][0],priority:0,index:lines.length});
+  }
+ }
  candidates.sort((a,b)=>b.priority-a.priority||b.index-a.index);
  return {total:candidates.length?candidates[0].amount:0,tax};
 }
@@ -740,9 +758,12 @@ function parseStoreRowReceipt(lines,store){
     const priceMatch=body.match(/^(.+?)\s*(?:[¥￥\\|]\s*|\s+)(\d{2,5})\s*[;；。.]?\s*$/u);
     if(priceMatch){
      name=priceMatch[1].trim();amount=Number(priceMatch[2]);match=priceMatch;
-    }else if(bare){
-     // 金額が文字化けした行も候補として残し、手入力で修正できるようにする。
-     receiptUnmatched.push({name:body.replace(/^\d{3,4}\s+/,'').trim(),amount:0,raw});
+    }else{
+     // OCRの末尾が「¥8」「¥」などで切れても、名前を候補に残す。
+     const candidate=body.replace(/(?:[¥￥\\|]\s*\d{0,1})\s*$/u,'').trim();
+     if(candidate && /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(candidate)){
+      receiptUnmatched.push({name:candidate,amount:0,raw});
+     }
     }
    }
   }
