@@ -624,13 +624,13 @@ function detectReceiptAmounts(lines){
   const normalized=line.replace(/[\s　]/g,'');
   const n=amountFrom(line);
   if(/(?:外税(?:8|10)%?|(?:8|10)%外税|外税額)/i.test(normalized)&&n>0&&n<10000)tax=n;
-  const payment=/(?:^|[^小])合計|合[言亠][十計]|お支払|支払総額|クレジット|クレジツト|クレジッ卜|クレジツ卜|クレジツ卜|クレジツ卜|クレジッ卜|掛売|お買上金額|お買い上げ金額|お支払い|クレジ.{0,5}ト|クレ.{0,4}ジ.{0,4}ト/i.test(normalized);
+  const payment=/(?:^|[^小])合計|(?:^|[\s、,])(?:=\s*)?(?:Et|E[tｔ]|計)\s*[¥￥]|合[言亠][十計]|お支払|支払総額|クレジット|クレジツト|クレジッ卜|クレジツ卜|クレジツ卜|クレジツ卜|クレジッ卜|掛売|お買上金額|お買い上げ金額|お支払い|クレジ.{0,5}ト|クレ.{0,4}ジ.{0,4}ト/i.test(normalized);
   const summaryOnly=/(?:小計|税|対象額|内訳|点数|預り|お釣)/i.test(normalized);
   if(!payment||summaryOnly)continue;
   // A bare number is safe here because the label identifies a payment row.
   let amount=n||amountFrom(line,true);
   // Prefer the rightmost currency value on a payment line, not a register number.
-  const monetary=[...line.normalize('NFKC').matchAll(/[¥￥]\s*([0-9]{1,3}(?:[\s,，]*[0-9]{3})+|[0-9]{3,7})/g)];
+  const monetary=[...line.normalize('NFKC').matchAll(/[¥￥]\s*([0-9]{1,3}(?:[\s,，.．]*[0-9]{3})+|[0-9]{3,7})/g)];
   if(monetary.length)amount=Number(monetary[monetary.length-1][1].replace(/\D/g,''));
   if(!amount&&i+1<lines.length){
    const next=String(lines[i+1]);
@@ -749,7 +749,7 @@ function parseStoreRowReceipt(lines,store){
    // OCRが税区分を落とした商品（例: 301 小松菜 ¥138）も候補にする。
    const head=taiyo.match(/^\s*[外内下力]\s*(?:8|10)\s*(.*)$/u);
    const bare=taiyo.match(/^\s*(\d{3,4})\s+(.+)$/u);
-   if(head||bare){
+   if((head||bare) && !/(?:20\d{2}\s*年|\d{1,2}\s*月\s*\d{1,2}\s*日|\d{1,2}:\d{2}|#\s*\d{4,}|No[:：]|レシート番号)/i.test(taiyo)){
     let body=(head?head[1]:bare[0]).trim();
     // 先頭の商品分類コード。OCRでは 0303 / 0 303 / 8 0303 などに崩れる。
     const codeMatch=body.match(/^(?:0\s*)?(\d{3,4})\s+(.+)$/u);
@@ -770,7 +770,7 @@ function parseStoreRowReceipt(lines,store){
   if(store==='taiyo' && (!match||amount<1||amount>50000||qty<1||qty>30)){
    // Keep plausible item rows for review instead of silently dropping them.
    const probe=line.normalize('NFKC').match(/^\s*[外内下力]\s*(?:8|10)\s*(.*)$/u) || line.normalize('NFKC').match(/^\s*(\d{3,4}\s+.+)$/u);
-   if(probe){
+   if(probe && !/(?:20\d{2}\s*年|\d{1,2}\s*月\s*\d{1,2}\s*日|\d{1,2}:\d{2}|#\s*\d{4,}|No[:：])/i.test(line)){
     const fragment=probe[1].replace(/^(?:0\s*)?\d{3,4}\s+/,'').trim();
     if(fragment && /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(fragment) && !summary.test(fragment)){
      const tail=fragment.match(/(?:[¥￥\\|]\s*|\s+)(\d{2,5})\s*[;；。.]?$/u);
