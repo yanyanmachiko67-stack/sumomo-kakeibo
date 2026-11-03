@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>すもも家計簿 Ver.10.27（店舗判定・診断強化）</title>
+<title>すもも家計簿 Ver.10.28（店舗判定・診断強化）</title>
 <style>
 :root{--pink:#e88ca8;--pink2:#f7dce5;--ink:#3d3438;--muted:#8b7d83;--bg:#fff8fa;--card:#fff;--line:#eadde2;--green:#79b89a;--blue:#8caed8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
@@ -27,7 +27,7 @@ h2{font-size:18px;margin:4px 0 12px} h3{font-size:15px;margin:4px 0 10px}
 </head>
 <body>
 <div class="app">
-  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.27（店舗判定・診断強化） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
+  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.28（店舗判定・診断強化） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
   <nav>
     <button class="tab active" data-page="home">ホーム</button>
     <button class="tab" data-page="add">支出を追加</button>
@@ -674,6 +674,8 @@ function detectReceiptDiscount(lines){
   // 値引きラベルと同じ行にある正の金額は明示的な値引きとして扱う。
   const plain=normalized.match(/[¥￥]\s*(\d{1,6})\s*$/);
   if(plain){total+=Number(plain[1]);continue;}
+  const trailingNegative=normalized.match(/(?:^|\s)-\s*(\d{1,5})\s*$/);
+  if(trailingNegative){total+=Number(trailingNegative[1]);continue;}
   // 別行の金額はマイナス表記の場合だけ採用。
   if(i+1<lines.length){
    const next=String(lines[i+1]).normalize('NFKC').replace(/[−ー‐‑–—]/g,'-').trim();
@@ -741,7 +743,7 @@ function parseStoreRowReceipt(lines,store){
    // 外8 / 内10などの税区分で始まる行だけを対象にする。
    const taiyo=line.normalize('NFKC').replace(/[，,]/g,'').replace(/[￥]/g,'¥');
    // OCRが税区分を落とした商品（例: 301 小松菜 ¥138）も候補にする。
-   const head=taiyo.match(/^\s*[外内下力]\s*(?:8|10)\s*(.*)$/u);
+   const head=taiyo.match(/^\s*[外内下力分£]\s*(?:8|10|18)\s*(.*)$/u);
    const bare=taiyo.match(/^\s*(\d{3,4})\s+(.+)$/u);
    if((head||bare) && !/(?:20\d{2}\s*年|\d{1,2}\s*月\s*\d{1,2}\s*日|\d{1,2}:\d{2}|#\s*\d{4,}|No[:：]|レシート番号)/i.test(taiyo)){
     let body=(head?head[1]:bare[0]).trim();
@@ -763,7 +765,7 @@ function parseStoreRowReceipt(lines,store){
   }
   if(store==='taiyo' && (!match||amount<1||amount>50000||qty<1||qty>30)){
    // Keep plausible item rows for review instead of silently dropping them.
-   const probe=line.normalize('NFKC').match(/^\s*[外内下力]\s*(?:8|10)\s*(.*)$/u) || line.normalize('NFKC').match(/^\s*(\d{3,4}\s+.+)$/u);
+   const probe=line.normalize('NFKC').match(/^\s*[外内下力分£]\s*(?:8|10|18)\s*(.*)$/u) || line.normalize('NFKC').match(/^\s*(\d{3,4}\s+.+)$/u);
    if(probe && !/(?:20\d{2}\s*年|\d{1,2}\s*月\s*\d{1,2}\s*日|\d{1,2}:\d{2}|#\s*\d{4,}|No[:：])/i.test(line)){
     const fragment=probe[1].replace(/^(?:0\s*)?\d{3,4}\s+/,'').trim();
     if(fragment && /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(fragment) && !summary.test(fragment)){
@@ -782,7 +784,7 @@ function parseStoreRowReceipt(lines,store){
   const hasJapanese=/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(name);
   const placeholder=!name||/^(?:MM|yy|ToY|\d+|¥|特)$/i.test(name);
   if(store!=='birthday'&&(!hasJapanese||placeholder))continue;
-  if(store==='taiyo'&&/(?:小\s*計|合\s*計|税\s*額|税\s*対象|買上\s*点数|レジ袋|お預|お釣)/.test(name))continue;
+  if(store==='taiyo'&&/(?:小\s*計|合\s*計|税\s*額|税\s*対象|買上\s*点数|お預|お釣)/.test(name))continue;
   if(placeholder)name='商品名を確認してね（'+code+'）';
   parsed.push({name,amount,category:receiptDefaultCategory(name,store),receiptCode:code});
   diagnostics.push('商品'+parsed.length+': '+raw+' → '+name+' / '+amount+'円'+(!hasJapanese?'（商品名要確認）':''));
@@ -795,7 +797,7 @@ function detectReceiptStoreWithReason(raw,lines){
  if(/(?:西松屋|にしまつや|nishimatsuya)/i.test(compact))return {store:'nishimatsuya',reason:'店名の文字を検出'};
  if(/(?:タイヨ|たいよ|taiyo)/i.test(compact))return {store:'taiyo',reason:'店名の文字を検出'};
  // 店名がOCRで欠けた場合は商品行の特徴で判定。複数行の一致が必須。
- const taiyoRows=lines.filter(row=>/^\s*[外内下力]\s*(?:8|10)\s*(?:0\s*)?\d{3,4}\s+.+/u.test(row.normalize('NFKC'))).length;
+ const taiyoRows=lines.filter(row=>/^\s*[外内下力分£]\s*(?:8|10|18)\s*(?:0\s*)?\d{3,4}\s+.+/u.test(row.normalize('NFKC'))).length;
  const birthdayRows=lines.filter(row=>/\b\d{3}\s*[-ー−‐–]\s*\d{4}\b/u.test(row.normalize('NFKC'))).length;
  if(taiyoRows>=2 && taiyoRows>=birthdayRows+1)return {store:'taiyo',reason:'商品行の「外8／内10＋商品コード」形式を'+taiyoRows+'行検出'};
  if(birthdayRows>=2 && birthdayRows>=taiyoRows+1)return {store:'birthday',reason:'商品番号「000-0000」形式を'+birthdayRows+'行検出'};
@@ -860,7 +862,7 @@ function parseReceiptText(){
    receiptItems=specialized.parsed;receiptExcluded=specialized.excluded;
    if(diag)diag.textContent=specialized.diagnostics;
    document.getElementById('ocrResults').style.display='block';renderReceiptItems();
-   receiptStatus('店舗別の形式で商品を抽出したよ。商品名・件数・割引を確認してね 🩷');return;
+   receiptStatus('店舗別の形式で商品を抽出したよ。未読取候補・数量・値引きを確認してね 🩷');return;
   }
  }
  const numericEnd=line=>{
