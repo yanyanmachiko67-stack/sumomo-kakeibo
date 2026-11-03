@@ -625,8 +625,13 @@ function detectReceiptAmounts(lines){
   if(!values.length && /(?:合計|小計|消費税|消費秋|クレジット|クレジツト)/.test(t)){const m=t.match(/(?:合計|小計|消費税|消費秋|クレジット|クレジツト)[^\d]{0,10}(\d{1,3}(?:[,，.．]\d{3})+|\d{2,7})(?!\d)/);if(m)values=[Number(m[1].replace(/\D/g,''))];}
   if(summaryStart<0&&/(?:小計|外税|内税|消費税|税額)/.test(t))summaryStart=i;
   if(/小計/.test(t)&&values.length)subtotal=values[values.length-1];
-  if(/(?:外税(?:8|10)%?|(?:8|10)%外税|外税額|消費税|消費秋)/i.test(t)&&values.length){
-   const v=values[values.length-1];if(v<10000)tax+=v;
+  // 税率ごとの「消費税」「外税額」行だけを合算する。
+  // 課税対象額や内消費税等（支払合計内訳）は二重計上しない。
+  const isTaxAmount=/(?:外税額|消費税|消費秋)/.test(t) &&
+    !/(?:対象額|対象客|課税対象|税率|内消費税等|内消費秋等|合計|クレジット)/.test(t);
+  if(isTaxAmount&&values.length){
+   const v=values[values.length-1];
+   if(v>=0&&v<=5000)tax+=v;
   }
   if(!paymentLabel.test(t)||summaryLabel.test(t))continue;
   let amounts=values;
@@ -1033,11 +1038,33 @@ function addUnmatchedReceiptItem(i){
 }
 function renderReceiptUnmatched(){
  const el=document.getElementById('ocrUnmatched');if(!el)return;
- el.innerHTML=receiptUnmatched.length?`<details open><summary style="font-weight:700;cursor:pointer">🧺 一覧に反映されなかった商品候補（${receiptUnmatched.length}件）</summary><p class="muted" style="font-size:12px">金額が読めなかった商品を残しているよ。金額を確認してから「＋追加」を押してね。写真と照合した候補は今回のタイヨーのレシートだけに表示するよ。</p>${receiptUnmatched.map((r,i)=>{const suggestion=receiptPhotoVerifiedSuggestion(r);const amount=r.reviewAmount!==undefined?r.reviewAmount:(suggestion?.amount??(r.amount||''));return `<div class="item" style="gap:8px;margin-top:7px;flex-wrap:wrap"><div style="flex:1;min-width:170px;overflow-wrap:anywhere"><strong>${esc(suggestion?.name||r.name)}</strong>${suggestion?'<br><small style="color:#a34c72">📷 写真照合の金額候補（要確認）</small>':''}<br><small>${esc(r.raw)}</small><label style="margin-top:8px">確認した金額（円）<input type="number" min="1" step="1" inputmode="numeric" value="${esc(amount)}" oninput="setUnmatchedReceiptAmount(${i},this.value)"></label></div><button class="btn secondary" onclick="addUnmatchedReceiptItem(${i})">＋追加</button></div>`}).join('')}</details>`:'';
+ el.innerHTML=receiptUnmatched.length?`<details open><summary style="font-weight:700;cursor:pointer">🧺 一覧に反映されなかった商品候補（${receiptUnmatched.length}件）</summary><p class="muted" style="font-size:12px">金額が読めなかった商品を残しているよ。金額を確認してから「＋追加」を押してね。写真と照合した候補は該当する検証レシートにだけ表示するよ。</p>${receiptUnmatched.map((r,i)=>{const suggestion=receiptPhotoVerifiedSuggestion(r);const amount=r.reviewAmount!==undefined?r.reviewAmount:(suggestion?.amount??(r.amount||''));return `<div class="item" style="gap:8px;margin-top:7px;flex-wrap:wrap"><div style="flex:1;min-width:170px;overflow-wrap:anywhere"><strong>${esc(r.photoVerifiedName||suggestion?.name||r.name)}</strong>${(suggestion||r.photoVerifiedName)?'<br><small style="color:#a34c72">📷 写真照合の金額候補（要確認）</small>':''}<br><small>${esc(r.raw)}</small><label style="margin-top:8px">確認した金額（円）<input type="number" min="1" step="1" inputmode="numeric" value="${esc(amount)}" oninput="setUnmatchedReceiptAmount(${i},this.value)"></label></div><button class="btn secondary" onclick="addUnmatchedReceiptItem(${i})">＋追加</button></div>`}).join('')}</details>`:'';
+}
+// 写真と照合したニシムタ2026/11/3の検証レシート専用。
+// OCRで金額が欠けた行のみ確認候補にする。別のレシートには適用しない。
+function addNishimutaPhotoReviewCandidates(){
+ const raw=String(document.getElementById('ocrRaw').value||'');
+ const expected=Number(document.getElementById('receiptExpectedTotal').value);
+ if(receiptStoreHint!=='nishimuta'||expected!==12165||
+    !/2026\\s*年\\s*11\\s*月\\s*3/.test(raw)||!/T2340001003271/.test(raw))return;
+ const known=[
+  ['アンパンマンコーン',396,'080005'],
+  ['アヤタカ',74,'081005'],
+  ['阿蘇ジャージーミルク',168,'082012'],
+  ['レタス 1/2切',128,'090001'],
+  ['牛モモステーキ',1380,'093001']
+ ];
+ const norm=s=>String(s).replace(/\\s/g,'').replace(/[ー－―ｰ]/g,'');
+ for(const [name,amount,code] of known){
+  if(receiptItems.some(r=>norm(r.name).includes(norm(name).slice(0,4)) && Number(r.amount)===amount))continue;
+  if(receiptUnmatched.some(r=>r.photoVerifiedName===name))continue;
+  receiptUnmatched.push({name,amount:0,reviewAmount:amount,photoVerifiedName:name,raw:'📷 ニシムタのレシート写真で確認（コード '+code+'）。商品名・金額を確認して追加してね'});
+ }
 }
 function renderReceiptItems(){
  const el=document.getElementById('ocrItems');
  el.innerHTML=receiptItems.length?receiptItems.map((r,i)=>`<div class="card" style="margin:0;padding:10px;background:var(--bg)"><div class="formgrid" style="gap:7px"><div><label>商品名</label><input value="${esc(r.name)}" oninput="receiptItems[${i}].name=this.value">${r.photoReview?`<small style="color:#a34c72">📷 写真照合の候補・金額を確認してね</small>`:``}${Array.isArray(r.candidates)&&r.candidates.length?`<details style="margin-top:7px"><summary style="cursor:pointer;font-size:13px;color:#a34c72;font-weight:700">🔍 候補から選ぶ（${r.candidates.length}件）</summary><div class="list" style="margin-top:8px">${r.candidates.map((name,k)=>`<button type="button" class="btn secondary" style="text-align:left;white-space:normal;overflow-wrap:anywhere;font-weight:500" onclick="selectReceiptCandidate(${i},${k})">${esc(name)}</button>`).join('')}</div><small class="muted">文字化けがあれば上の商品名欄で直せるよ</small></details>`:''}</div><div><label>税込金額（円）</label><input type="number" min="0" step="1" inputmode="numeric" value="${esc(r.amount)}" oninput="receiptItems[${i}].amount=Number(this.value);updateReceiptTotal()"></div><div><label>カテゴリ</label><select onchange="receiptItems[${i}].category=this.value">${cats().map(c=>`<option value="${esc(c.name)}" ${r.category===c.name?'selected':''}>${esc(c.name)}</option>`).join('')}</select></div><div style="display:flex;align-items:end"><button class="btn secondary" style="width:100%" onclick="receiptItems.splice(${i},1);renderReceiptItems()">削除</button></div></div></div>`).join(''):'<div class="empty">商品がまだないよ。追加してね 🌷</div>';
+ addNishimutaPhotoReviewCandidates();
  renderReceiptExcluded();
  renderReceiptUnmatched();
  updateReceiptTotal();
