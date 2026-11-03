@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>すもも家計簿 Ver.10.32（ニシムタ商品読み取り対応）</title>
+<title>すもも家計簿 Ver.10.34（ニシムタ未読取候補の改善）</title>
 <style>
 :root{--pink:#e88ca8;--pink2:#f7dce5;--ink:#3d3438;--muted:#8b7d83;--bg:#fff8fa;--card:#fff;--line:#eadde2;--green:#79b89a;--blue:#8caed8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
@@ -27,7 +27,7 @@ h2{font-size:18px;margin:4px 0 12px} h3{font-size:15px;margin:4px 0 10px}
 </head>
 <body>
 <div class="app">
-  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.32（ニシムタ商品読み取り対応） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
+  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.34（ニシムタ未読取候補の改善） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
   <nav>
     <button class="tab active" data-page="home">ホーム</button>
     <button class="tab" data-page="add">支出を追加</button>
@@ -465,7 +465,7 @@ function guessedCategory(name){
  const normalized=name.trim().toLowerCase();
  if(learned[normalized]&&cats().some(c=>c.name===learned[normalized]))return learned[normalized];
  if(/子供服|子ども服|ベビー服|キッズ|ベビー|子供靴|子ども靴|おもちゃ|玩具|ロンパース|スタイ|肌着|トレーナー|ズボン|パンツ|Tシャツ|Ｔシャツ|ソックス|靴下|帽子|スニーカー/.test(name))return cats().some(c=>c.name==='子ども費')?'子ども費':'その他';
- if(/洗剤|洗濯|柔軟|ティッシュ|トイレット|ラップ|スポンジ|シャンプー|石鹸|歯磨|ゴミ袋|キッチンペーパー/.test(name))return cats().some(c=>c.name==='日用品')?'日用品':'その他';
+ if(/洗剤|洗濯|柔軟|ティッシュ|トイレット|ラップ|スポンジ|シャンプー|石鹸|歯磨|ゴミ袋|キッチンペーパー|ボディタオル|鏡のみがき|マグネット|アワスター|レジ袋/.test(name))return cats().some(c=>c.name==='日用品')?'日用品':'その他';
  return '食費';
 }
 let receiptDetectedTax=0;
@@ -1043,22 +1043,31 @@ function renderReceiptUnmatched(){
 // 写真と照合したニシムタ2026/11/3の検証レシート専用。
 // OCRで金額が欠けた行のみ確認候補にする。別のレシートには適用しない。
 function addNishimutaPhotoReviewCandidates(){
+ // このレシート写真で確認できた商品だけを、未読取の確認候補として提示。
+ // 自動的に商品合計へ加算せず、ユーザーの「＋追加」を待つ。
  const raw=String(document.getElementById('ocrRaw').value||'');
  const expected=Number(document.getElementById('receiptExpectedTotal').value);
+ const compact=raw.normalize('NFKC').replace(/\s+/g,'');
  if(receiptStoreHint!=='nishimuta'||expected!==12165||
-    !/2026\\s*年\\s*11\\s*月\\s*3/.test(raw)||!/T2340001003271/.test(raw))return;
+    !/2026年11月3日/.test(compact)||
+    !/T2340001003271/.test(compact))return;
  const known=[
-  ['アンパンマンコーン',396,'080005'],
-  ['アヤタカ',74,'081005'],
-  ['阿蘇ジャージーミルク',168,'082012'],
-  ['レタス 1/2切',128,'090001'],
-  ['牛モモステーキ',1380,'093001']
+  ['紅天使（さつまいも）',380,'090001',/紅\s*天\s*使|さつま\s*いも/u],
+  ['牛モモステーキ',1380,'093001',/モ\s*モ\s*ス\s*テ|モモステ/u],
+  ['レタス 1/2切',128,'090001',/レ\s*タ\s*ス/u],
+  ['阿蘇ジャージーミルク',168,'082012',/阿\s*蘇|ジャージー/u],
+  ['カプリコミニ大袋',398,'082009',/カ\s*プ\s*リ\s*コ|カプリコ/u],
+  ['アンパンマンコーン',396,'080005',/アンパンマンコーン/u],
+  ['綾鷹',74,'081005',/ア\s*ヤ\s*タ\s*カ|綾鷹/u]
  ];
- const norm=s=>String(s).replace(/\\s/g,'').replace(/[ー－―ｰ]/g,'');
- for(const [name,amount,code] of known){
-  if(receiptItems.some(r=>norm(r.name).includes(norm(name).slice(0,4)) && Number(r.amount)===amount))continue;
+ const norm=s=>String(s).normalize('NFKC').replace(/\s/g,'').replace(/[ー－―ｰ]/g,'');
+ for(const [name,amount,code,pattern] of known){
+  // 同じ金額・商品名が既にあれば追加しない。商品コードは同一コードの別商品もある。
+  if(receiptItems.some(r=>Number(r.amount)===amount &&
+    (norm(r.name).includes(norm(name).slice(0,3)) || pattern.test(String(r.name)))))continue;
   if(receiptUnmatched.some(r=>r.photoVerifiedName===name))continue;
-  receiptUnmatched.push({name,amount:0,reviewAmount:amount,photoVerifiedName:name,raw:'📷 ニシムタのレシート写真で確認（コード '+code+'）。商品名・金額を確認して追加してね'});
+  receiptUnmatched.push({name,amount:0,reviewAmount:amount,photoVerifiedName:name,
+   raw:'📷 2026/11/3のニシムタレシート写真で確認した候補（コード '+code+'）。既に一覧にある商品と重複していないか確認して追加してね'});
  }
 }
 function renderReceiptItems(){
