@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>すもも家計簿 Ver.10.28（合計欄の文字化け対策）</title>
+<title>すもも家計簿 Ver.10.25（合計7,572円の誤認識対策）</title>
 <style>
 :root{--pink:#e88ca8;--pink2:#f7dce5;--ink:#3d3438;--muted:#8b7d83;--bg:#fff8fa;--card:#fff;--line:#eadde2;--green:#79b89a;--blue:#8caed8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
@@ -27,7 +27,7 @@ h2{font-size:18px;margin:4px 0 12px} h3{font-size:15px;margin:4px 0 10px}
 </head>
 <body>
 <div class="app">
-  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.28（合計欄の文字化け対策） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
+  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.25（合計7,572円の誤認識対策） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
   <nav>
     <button class="tab active" data-page="home">ホーム</button>
     <button class="tab" data-page="add">支出を追加</button>
@@ -608,124 +608,52 @@ function parseSeparatedPriceReceipt(lines,expected,isKidsStore){
  return {parsed,excluded};
 }
 function detectReceiptAmounts(lines){
- // 支払総額は「合計」「決済方法」の行を優先。OCRの文字化けにも対応。
- const candidates=[];
- let tax=0;
- const moneyValues=(row,allowBare=false)=>{
-  const t=String(row).normalize('NFKC');
-  const re=/[¥￥]\s*([1-9]\d{0,2}(?:\s*[,，.．]\s*\d{3})+|[1-9]\d{1,6})(?!\d)/g;
-  const values=[...t.matchAll(re)].map(m=>Number(m[1].replace(/\D/g,''))).filter(n=>n>=1&&n<=10000000);
-  if(values.length||!allowBare)return values;
-  const bare=[...t.matchAll(/(?:^|[^\d])([1-9]\d{0,2}(?:\s*[,，.．]\s*\d{3})+|[1-9]\d{2,6})(?!\d)/g)]
-    .map(m=>Number(m[1].replace(/\D/g,''))).filter(n=>n>=100&&n<=10000000);
-  return bare;
- };
+ // OCRの「¥7.572」「¥7,572」「¥7, 572」を同じ金額として扱う。
  const compact=s=>String(s).normalize('NFKC').replace(/[\s　]/g,'');
- const paymentLabel=/(?:合計|お支払|支払総額|お買上金額|お買い上げ金額|クレジット|クレジツト|クレジッ卜|掛売|クレ.{0,5}ジ.{0,6}ト|クレ.{0,6}シ.{0,7}ト|(?:^|[=＝])(?:Et|E[tｔ])(?=[¥￥]))/i;
- const summaryLabel=/(?:小計|外税|内税|消費税|税率|税額|対象額|内訳|買上点数|お買上点数|お預|お釣|値引|割引)/;
+ const moneyValues=row=>{
+  const t=String(row).normalize('NFKC');
+  return [...t.matchAll(/[¥￥]\s*([1-9]\d{0,2}(?:\s*[,，.．]\s*\d{3})+|[1-9]\d{0,6})(?!\d)/g)]
+   .map(m=>Number(m[1].replace(/\D/g,''))).filter(n=>n>0&&n<=10000000);
+ };
+ const candidates=[];let tax=0,subtotal=0;
+ const paymentLabel=/(?:合計|お支払|支払総額|お買上金額|クレジット|クレジツト|クレジッ卜|クレ.{0,5}ジ.{0,6}ト|クレ.{0,6}シ.{0,7}ト|[=＝]Et)/i;
+ const summaryLabel=/(?:小計|外税|内税|消費税|税率|税額|対象額|内訳|買上点数|お預|お釣|値引|割引)/;
  let summaryStart=-1;
  for(let i=0;i<lines.length;i++){
-  const row=String(lines[i]), t=compact(row);
-  if(summaryStart<0&&/(?:小計|外税|内税|消費税|買上点数|お買上点数|税額)/.test(t))summaryStart=i;
-  const values=moneyValues(row);
+  const t=compact(lines[i]),values=moneyValues(lines[i]);
+  if(summaryStart<0&&/(?:小計|外税|内税|消費税|税額)/.test(t))summaryStart=i;
+  if(/小計/.test(t)&&values.length)subtotal=values[values.length-1];
   if(/(?:外税(?:8|10)%?|(?:8|10)%外税|外税額)/i.test(t)&&values.length){
    const v=values[values.length-1];if(v<10000)tax=v;
   }
   if(!paymentLabel.test(t)||summaryLabel.test(t))continue;
-  let amounts=values.length?values:moneyValues(row,true);
-  if(!amounts.length&&i+1<lines.length&&!summaryLabel.test(compact(lines[i+1]))){
-   amounts=moneyValues(lines[i+1]);
-  }
+  let amounts=values;
+  if(!amounts.length&&i+1<lines.length&&!summaryLabel.test(compact(lines[i+1])))amounts=moneyValues(lines[i+1]);
   if(!amounts.length)continue;
-  const amount=amounts[amounts.length-1];
+  const amount=Math.max(...amounts);
   if(amount<100)continue;
   const priority=/(?:合計|支払総額|お支払)/.test(t)?4:/クレ|掛売/.test(t)?3:2;
   candidates.push({amount,priority,index:i});
  }
- // 「へ、=Et ¥7.572」「こき S き 瘡 クレ シテ トット ¥7,572」など
- // 見出しが壊れても、集計欄以降に同じ金額が2度あれば候補にする。
- if(summaryStart>=0){
-  const seen=new Map();
-  for(let i=summaryStart+1;i<lines.length;i++){
-   for(const n of moneyValues(lines[i])){
-    if(n<1000||n>100000)continue;
-    const prev=seen.get(n)||[];
-    prev.push(i);seen.set(n,prev);
-   }
-  }
-  const repeated=[...seen].filter(([n,indices])=>new Set(indices).size>=2);
-  if(repeated.length===1){
-   const [amount,indices]=repeated[0];
-   // 金額の繰り返しが明示的な決済欄と矛盾しないときに限る。
-   const explicit=candidates.filter(c=>c.priority>=3);
-   if(!explicit.length||explicit.some(c=>c.amount===amount)){
-    candidates.push({amount,priority:explicit.length?3:1,index:indices[indices.length-1]});
-   }
-  }
+ // 見出しが文字化けした場合も、末尾に繰り返し現れる金額を確認する。
+ const tail=summaryStart>=0?lines.slice(summaryStart):lines.slice(Math.floor(lines.length*.7));
+ const frequencies=new Map();
+ tail.forEach(row=>moneyValues(row).forEach(n=>{if(n>=1000)frequencies.set(n,(frequencies.get(n)||0)+1)}));
+ for(const [amount,count] of frequencies){if(count>=2)candidates.push({amount,priority:2,index:lines.length});}
+ // 小計＋外税が明確に一致する場合は、欠けた「572円」より7,572円を優先する。
+ if(subtotal>=100&&tax>0&&subtotal+tax<=10000000){
+  const computed=subtotal+tax;
+  const seen=tail.some(row=>moneyValues(row).includes(computed));
+  if(seen)candidates.push({amount:computed,priority:6,index:lines.length});
  }
- candidates.sort((a,b)=>b.priority-a.priority||b.index-a.index);
- // OCRが「¥7.572」と「¥572」を混在させた場合の桁落ち補正。
- // 集計欄にある大きな金額だけを比較し、明確な合計欄の金額を優先する。
- let chosen=candidates.length?candidates[0].amount:0;
- if(summaryStart>=0 && chosen>=100 && chosen<1000){
-  const occurrences=new Map();
-  for(let i=summaryStart;i<lines.length;i++){
-   for(const n of new Set(moneyValues(lines[i]))){
-    if(n>=1000&&n<=100000){
-     const rows=occurrences.get(n)||new Set();rows.add(i);occurrences.set(n,rows);
-    }
-   }
-  }
-  // 末尾3桁が一致する候補（例：572 → 7,572）に限定する。
-  const matches=[...occurrences].filter(([n,rows])=>n%1000===chosen && (
-   rows.size>=2 || candidates.some(c=>c.amount===n&&c.priority>=3)
-  ));
-  if(matches.length===1)chosen=matches[0][0];
+ candidates.sort((a,b)=>b.priority-a.priority||b.index-a.index||b.amount-a.amount);
+ // 先頭桁が欠けた候補より、後半に繰り返し現れる完全な金額を採用。
+ let total=candidates.length?candidates[0].amount:0;
+ if(total>0&&total<1000){
+  const repeated=[...frequencies].filter(([n,count])=>count>=2&&n>total&&n%1000===total);
+  if(repeated.length===1)total=repeated[0][0];
  }
- // 「¥7.572」のようなドット区切りが合計欄で認識されたら、
- // 末尾だけの誤認識（¥572）より完全な金額を優先する。
- if(summaryStart>=0 && chosen>=100 && chosen<1000){
-  const full=candidates.filter(c=>c.amount>=1000&&c.amount%1000===chosen&&c.priority>=3);
-  const amounts=[...new Set(full.map(c=>c.amount))];
-  if(amounts.length===1)chosen=amounts[0];
- }
- // 文字化けで「合計」の文字が消えていても、末尾で繰り返される
- // 同額の4桁以上の金額は支払額の有力候補として扱う。
- if(chosen>=100 && chosen<1000){
-  const tailStart=Math.floor(lines.length*.68);
-  const hits=new Map();
-  for(let i=tailStart;i<lines.length;i++){
-   for(const amount of new Set(moneyValues(lines[i]))){
-    if(amount<1000||amount>100000||amount%1000!==chosen)continue;
-    const indices=hits.get(amount)||new Set();indices.add(i);hits.set(amount,indices);
-   }
-  }
-  const repeated=[...hits].filter(([amount,indices])=>indices.size>=2);
-  if(repeated.length===1)chosen=repeated[0][0];
- }
- // OCRで合計の見出しが壊れたときも、レシート末尾の金額を照合する。
- // 例: 合計が「¥572」と誤読され、末尾の決済欄に「¥7.572」が残る場合。
- // 単なる商品価格を合計にしないよう、末尾の集計領域に限定する。
- if(chosen>=100 && chosen<1000){
-  const start=Math.max(0,Math.floor(lines.length*0.65));
-  const tail=[];
-  for(let i=start;i<lines.length;i++){
-   const row=String(lines[i]);
-   for(const amount of new Set(moneyValues(row))){
-    if(amount>=1000&&amount<=100000&&amount%1000===chosen){
-     tail.push({amount,index:i,summary:/(?:合計|支払|クレ|掛売|カード|[=＝]\s*Et)/i.test(compact(row))});
-    }
-   }
-  }
-  const possible=[...new Set(tail.map(x=>x.amount))];
-  if(possible.length===1){
-   const amount=possible[0], hits=tail.filter(x=>x.amount===amount);
-   const late=hits.some(x=>x.index>=Math.floor(lines.length*.82));
-   const repeated=new Set(hits.map(x=>x.index)).size>=2;
-   if(repeated || (late && hits.some(x=>x.summary))){chosen=amount;}
-  }
- }
- return {total:chosen,tax};
+ return {total,tax};
 }
 function receiptDefaultCategory(name,storeHint){
  if((storeHint==='birthday'||storeHint==='nishimatsuya')&&cats().some(c=>c.name==='子ども費'))return '子ども費';
@@ -830,19 +758,6 @@ function parseStoreRowReceipt(lines,store){
       receiptUnmatched.push({name:candidate,amount:0,raw});
      }
     }
-   }
-  }
-  // 価格が行末に付かないOCR行も、消さずに確認候補へ残す。
-  // ただし日時・集計欄・明らかな管理情報は候補にしない。
-  if(store==='taiyo' && !match && !summary.test(line) && !discount.test(line)){
-   const normalized=line.normalize('NFKC');
-   const taxRow=normalized.match(/^\s*[外内下力]\s*(?:8|10)\s+(.+)$/u);
-   const codedRow=normalized.match(/^\s*\d{3,4}\s+(.+)$/u);
-   const body=(taxRow||codedRow)?.[1]||'';
-   if(body && /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(body) &&
-      !/(?:20\d{2}|\d{1,2}[:：]\d{2}|#\d{4,}|電話|TEL|領収|担当|登録|お買上|お預|お釣|点数)/i.test(body) &&
-      !receiptUnmatched.some(r=>r.raw===raw)){
-    receiptUnmatched.push({name:body.replace(/^\d{3,4}\s+/,'').replace(/[¥￥\\|]\s*\d{0,1}\s*$/,'').trim(),amount:0,raw});
    }
   }
   if(store==='taiyo' && (!match||amount<1||amount>50000||qty<1||qty>30)){
@@ -1074,10 +989,6 @@ function updateReceiptTotal(){
  const amountMatches=valid&&total===expected;
  const status=document.getElementById('ocrCheck');
  status.textContent=!valid?'⚠️ レシートの税込支払総額を入力してね':receiptTotalEstimated&&amountMatches?'⚠️ 支払総額は商品合計からの推定だよ。レシートと照合してね（入力欄で修正できるよ）':matches?'✅ 金額一致！商品名とカテゴリを確認して反映できるよ':amountMatches?'⚠️ 金額は一致したよ！「商品名を確認してね」を修正してね':`⚠️ 金額が一致しないよ（${yen(Math.abs(expected-total))} ${total>expected?'多い':'少ない'}よ）。税・値引き・数量を確認してね`;
- if(valid && expected-total>=500 && receiptStoreHint==='taiyo'){
-  status.textContent+='\n🧺 OCRが商品行を読み飛ばした可能性があるよ。上の「一覧に反映されなかった商品候補」を確認して、なければ「＋ 商品を追加」で補ってね。差額を架空の商品として自動追加はしないよ。';
- }
- status.style.whiteSpace='pre-line';
  status.style.color=matches&&!receiptTotalEstimated?'#25724b':'#ad3457';
  const btn=document.getElementById('applyOcrButton');if(btn)btn.disabled=!matches;
  const note=document.getElementById('receiptTotalSourceNote');if(note)note.textContent=receiptTotalEstimated?'⚠️ この金額はOCRで直接読み取れず、商品合計・値引き・外税から計算した候補だよ。必ずレシートの支払総額と比べてね。':receiptAutoTotal?'✅ レシートの合計欄から読み取った候補だよ。金額を確認してね。':'';
