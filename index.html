@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>すもも家計簿 Ver.10.31（未読取4商品の自動候補）</title>
+<title>すもも家計簿 Ver.10.32（ニシムタ商品読み取り対応）</title>
 <style>
 :root{--pink:#e88ca8;--pink2:#f7dce5;--ink:#3d3438;--muted:#8b7d83;--bg:#fff8fa;--card:#fff;--line:#eadde2;--green:#79b89a;--blue:#8caed8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
@@ -27,7 +27,7 @@ h2{font-size:18px;margin:4px 0 12px} h3{font-size:15px;margin:4px 0 10px}
 </head>
 <body>
 <div class="app">
-  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.31（未読取4商品の自動候補） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
+  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.32（ニシムタ商品読み取り対応） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
   <nav>
     <button class="tab active" data-page="home">ホーム</button>
     <button class="tab" data-page="add">支出を追加</button>
@@ -140,7 +140,7 @@ h2{font-size:18px;margin:4px 0 12px} h3{font-size:15px;margin:4px 0 10px}
           <input id="receiptExpectedTotal" type="number" min="1" step="1" inputmode="numeric" placeholder="例：1938" oninput="receiptAutoTotal=false;receiptTotalEstimated=false;updateReceiptTotal()">
           <small id="receiptTotalSourceNote" class="muted" style="display:block;margin-top:5px"></small><small class="muted">支払総額は読み取れた場合に自動入力するよ。商品金額が税抜の場合は、認識した外税をカテゴリ別に配分して照合するよ。必ずレシートと見比べてね。</small>
         </div>
-        <div style="margin:10px 0"><label for="receiptStoreSelect">🏬 店舗（自動判定・違ったら手動で選んでね）</label><select id="receiptStoreSelect" onchange="changeReceiptStore(this.value)"><option value="">自動判定・その他</option><option value="taiyo">タイヨー</option><option value="birthday">バースデイ</option><option value="nishimatsuya">西松屋</option></select></div><div id="receiptStoreDiagnosis" class="muted" style="font-size:12px;margin:5px 0 12px" aria-live="polite"></div><div id="ocrItems" class="list"></div>
+        <div style="margin:10px 0"><label for="receiptStoreSelect">🏬 店舗（自動判定・違ったら手動で選んでね）</label><select id="receiptStoreSelect" onchange="changeReceiptStore(this.value)"><option value="">自動判定・その他</option><option value="taiyo">タイヨー</option><option value="nishimuta">ニシムタ</option><option value="birthday">バースデイ</option><option value="nishimatsuya">西松屋</option></select></div><div id="receiptStoreDiagnosis" class="muted" style="font-size:12px;margin:5px 0 12px" aria-live="polite"></div><div id="ocrItems" class="list"></div>
         <div id="ocrExcluded" style="margin-top:10px"></div><div id="ocrUnmatched" style="margin-top:12px"></div>
         <div style="margin-top:12px;padding:12px;border:1px solid #edc4d0;border-radius:12px"><label for="receiptDiscountInput">🏷️ レシートの値引き合計（円・確認して変更できるよ）</label><input id="receiptDiscountInput" type="number" min="0" step="1" inputmode="numeric" value="0" oninput="receiptDetectedDiscount=Math.max(0,Number(this.value)||0);updateReceiptTotal()"><small class="muted">値引きが読み取れた場合は自動入力。読み取れなければレシートの金額を入力してね。</small></div>
         <details id="ocrDiagnostic" style="margin-top:12px;padding:12px;border:1px solid #edc4d0;border-radius:12px"><summary style="cursor:pointer;font-weight:700">🔍 商品名の読み取り診断（テスト用）</summary><p class="muted" style="font-size:12px">商品名を探した前後の文字だけ表示するよ。個人情報が含まれることもあるので、スクショを送る前に確認してね。</p><div id="ocrDiagnosticBody" style="font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere"></div></details>
@@ -621,11 +621,12 @@ function detectReceiptAmounts(lines){
  const summaryLabel=/(?:小計|外税|内税|消費税|税率|税額|対象額|内訳|買上点数|お預|お釣|値引|割引)/;
  let summaryStart=-1;
  for(let i=0;i<lines.length;i++){
-  const t=compact(lines[i]),values=moneyValues(lines[i]);
+  const t=compact(lines[i]);let values=moneyValues(lines[i]);
+  if(!values.length && /(?:合計|小計|消費税|消費秋|クレジット|クレジツト)/.test(t)){const m=t.match(/(?:合計|小計|消費税|消費秋|クレジット|クレジツト)[^\d]{0,10}(\d{1,3}(?:[,，.．]\d{3})+|\d{2,7})(?!\d)/);if(m)values=[Number(m[1].replace(/\D/g,''))];}
   if(summaryStart<0&&/(?:小計|外税|内税|消費税|税額)/.test(t))summaryStart=i;
   if(/小計/.test(t)&&values.length)subtotal=values[values.length-1];
-  if(/(?:外税(?:8|10)%?|(?:8|10)%外税|外税額)/i.test(t)&&values.length){
-   const v=values[values.length-1];if(v<10000)tax=v;
+  if(/(?:外税(?:8|10)%?|(?:8|10)%外税|外税額|消費税|消費秋)/i.test(t)&&values.length){
+   const v=values[values.length-1];if(v<10000)tax+=v;
   }
   if(!paymentLabel.test(t)||summaryLabel.test(t))continue;
   let amounts=values;
@@ -683,6 +684,51 @@ const birthdayKnownCodes={
  '211-7525':'Tシャツ','214-1009':'シャツブラウス','211-7211':'Tシャツ',
  '212-2643':'トレーナー','881-0516':'ヨコヨウスキ'
 };
+
+// ニシムタ: 商品コード6桁＋商品名＋金額。OCRの左側に混入したノイズを無視する。
+function parseNishimutaReceipt(lines){
+ const parsed=[],excluded=[],diagnostics=[];
+ receiptUnmatched=[];
+ const summary=/(?:小\s*計|合\s*計|消費\s*税|課\s*税|対\s*象\s*額|買\s*上\s*点\s*数|クレジット|クレジツト|内\s*消費|税\s*率|お\s*預|お\s*釣)/u;
+ let finished=false;
+ for(let i=0;i<lines.length;i++){
+  const raw=String(lines[i]),t=raw.normalize('NFKC');
+  if(summary.test(t)){finished=true;continue}
+  if(finished)continue;
+  // 行頭はOCRノイズが多い。最初の6桁商品コードから右側だけ使用する。
+  const cm=t.match(/(?:^|[^\d])([0-9OＢB]{6})\s*(?=[^\d]|$)/u);
+  if(!cm)continue;
+  const code=cm[1].replace(/[O]/g,'0').replace(/[ＢB]/g,'8');
+  if(!/^(?:04|06|08|09)\d{4}$/.test(code))continue;
+  let body=t.slice(cm.index+cm[0].length).trim();
+  if(!body||body.length>120)continue;
+  // 末尾にある¥ / ￥ / OCRで誤認識されたバックスラッシュを許容。
+  const pm=body.match(/(?:[¥￥\\]\s*)([0-9][0-9,，.．\s]{0,9}|[0-9][%SIlOo][0-9])\s*[|;；。.]?\s*$/u);
+  let amount=0,priceUncertain=false,name=body;
+  if(pm){
+   name=body.slice(0,pm.index).trim();
+   let digits=pm[1].replace(/[,，.．\s]/g,'').replace(/[Oo]/g,'0').replace(/[Il]/g,'1').replace(/[S]/g,'5').replace(/%/g,'9');
+   amount=Number(digits);
+   priceUncertain=/[%SIlOo]/.test(pm[1]);
+  }else{
+   // 金額記号が消えている場合は最後の数字だけを拾う。
+   const bare=body.match(/^(.+?)\s+(\d{2,5})\s*$/u);
+   if(bare){name=bare[1];amount=Number(bare[2]);priceUncertain=true;}
+  }
+  name=name.replace(/^[\s*＊※«¢+|\\\-ー]+/gu,'')
+   .replace(/\s+/g,' ').replace(/^[^ぁ-んァ-ヶ一-龠]{0,18}(?=[ぁ-んァ-ヶ一-龠])/u,'').trim();
+  if(!name||!/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(name))
+   name='商品名を確認（コード '+code+'）';
+  if(!Number.isInteger(amount)||amount<1||amount>50000){
+   receiptUnmatched.push({name,amount:0,raw});
+   diagnostics.push('金額要確認: '+raw);
+   continue;
+  }
+  parsed.push({name,amount,category:receiptDefaultCategory(name,'nishimuta'),receiptCode:code,photoReview:priceUncertain});
+  diagnostics.push(code+' → '+name+' / '+amount+'円'+(priceUncertain?'（金額要確認）':''));
+ }
+ return {parsed,excluded,diagnostics:diagnostics.join('\n')||'ニシムタの商品コード行が見つからなかったよ'};
+}
 function parseStoreRowReceipt(lines,store){
  const parsed=[],excluded=[],diagnostics=[];
  receiptUnmatched=[];
@@ -778,8 +824,11 @@ function detectReceiptStoreWithReason(raw,lines){
  const compact=String(raw||'').normalize('NFKC').replace(/[\s　・･.,，。:：\-ー_]/g,'').toLowerCase();
  if(/(?:バースデイ|バースディ|birthday|ばーすでい)/i.test(compact))return {store:'birthday',reason:'店名の文字を検出'};
  if(/(?:西松屋|にしまつや|nishimatsuya)/i.test(compact))return {store:'nishimatsuya',reason:'店名の文字を検出'};
+ if(/(?:ニシムタ|にしむた|nishimuta|スーパーセンター)/i.test(compact))return {store:'nishimuta',reason:'店名の文字を検出'};
  if(/(?:タイヨ|たいよ|taiyo)/i.test(compact))return {store:'taiyo',reason:'店名の文字を検出'};
  // 店名がOCRで欠けた場合は商品行の特徴で判定。複数行の一致が必須。
+ const nishimutaRows=lines.filter(row=>/(?:^|[^\d])(?:04|06|08|09)\d{4}\s*[^\n]*[¥￥\\]\s*\d/i.test(row.normalize('NFKC'))).length;
+ if(nishimutaRows>=3)return {store:'nishimuta',reason:'6桁の商品コード＋金額を'+nishimutaRows+'行検出'};
  const taiyoRows=lines.filter(row=>/^\s*[外内下力分£]\s*(?:8|10|18)\s*(?:0\s*)?\d{3,4}\s+.+/u.test(row.normalize('NFKC'))).length;
  const birthdayRows=lines.filter(row=>/\b\d{3}\s*[-ー−‐–]\s*\d{4}\b/u.test(row.normalize('NFKC'))).length;
  if(taiyoRows>=2 && taiyoRows>=birthdayRows+1)return {store:'taiyo',reason:'商品行の「外8／内10＋商品コード」形式を'+taiyoRows+'行検出'};
@@ -828,7 +877,7 @@ function parseReceiptText(){
  // If a store name is not legible in OCR, a strong row-format match can identify
  // the store without relying on the user's manual selection.
  if(!receiptStoreHint && !receiptStoreManuallyChosen && unitRowCount<2){
-  const candidates=['taiyo','birthday'].map(store=>({store,result:parseStoreRowReceipt(lines,store)}));
+  const candidates=['taiyo','birthday','nishimuta'].map(store=>({store,result:store==='nishimuta'?parseNishimutaReceipt(lines):parseStoreRowReceipt(lines,store)}));
   candidates.sort((a,b)=>b.result.parsed.length-a.result.parsed.length);
   if(candidates[0].result.parsed.length>=3 && candidates[0].result.parsed.length>=candidates[1].result.parsed.length+2){
    receiptStoreHint=candidates[0].store;
@@ -839,7 +888,7 @@ function parseReceiptText(){
  // 店舗のレシートは「コード 商品名 数量 金額」が1行に並ぶことがある。
  // 先にこの形式を調べ、商品行が十分見つかった場合は従来の一般OCR解析を置き換える。
  if(unitRowCount<2){
-  const specialized=parseStoreRowReceipt(lines,receiptStoreHint);
+  const specialized=receiptStoreHint==='nishimuta'?parseNishimutaReceipt(lines):parseStoreRowReceipt(lines,receiptStoreHint);
   if(specialized.parsed.length>=2){
    if(!keepBetterReceiptResult(specialized.parsed,raw)){renderReceiptItems();return;}
    receiptItems=specialized.parsed;receiptExcluded=specialized.excluded;
@@ -924,7 +973,7 @@ function changeReceiptStore(value){
 function parseReceiptTextWithOverride(value){
  const raw=document.getElementById('ocrRaw').value;
  const lines=raw.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
- const result=parseStoreRowReceipt(lines,value);
+ const result=value==='nishimuta'?parseNishimutaReceipt(lines):parseStoreRowReceipt(lines,value);
  if(result.parsed.length>=2){if(!keepBetterReceiptResult(result.parsed,raw)){renderReceiptItems();return;}receiptItems=result.parsed;receiptExcluded=result.excluded;document.getElementById('ocrDiagnosticBody').textContent=result.diagnostics;renderReceiptItems();}
  else {receiptItems.forEach(r=>{r.category=receiptDefaultCategory(r.name,value)});renderReceiptItems();}
 }
