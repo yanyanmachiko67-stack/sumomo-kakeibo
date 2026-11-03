@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>すもも家計簿 Ver.10.29（商品行・値引き改善）</title>
+<title>すもも家計簿 Ver.10.30（未読取4商品の確認補助）</title>
 <style>
 :root{--pink:#e88ca8;--pink2:#f7dce5;--ink:#3d3438;--muted:#8b7d83;--bg:#fff8fa;--card:#fff;--line:#eadde2;--green:#79b89a;--blue:#8caed8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
@@ -27,7 +27,7 @@ h2{font-size:18px;margin:4px 0 12px} h3{font-size:15px;margin:4px 0 10px}
 </head>
 <body>
 <div class="app">
-  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.29（商品行・値引き改善） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
+  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.30（未読取4商品の確認補助） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
   <nav>
     <button class="tab active" data-page="home">ホーム</button>
     <button class="tab" data-page="add">支出を追加</button>
@@ -940,14 +940,32 @@ function renderReceiptExcluded(){
  if(!el)return;
  el.innerHTML=receiptExcluded.length?`<details><summary style="cursor:pointer;font-weight:700">🔎 商品から除外した候補（${receiptExcluded.length}件）を確認</summary><p class="muted" style="font-size:12px">誤って除外した商品は「商品に戻す」を押してね。</p>${receiptExcluded.map((r,i)=>`<div class="row" style="gap:8px;margin:8px 0"><span style="font-size:12px;flex:1;overflow-wrap:anywhere">${esc(r.name)} ${yen(r.amount)}<br><small>${esc(r.reason)}</small></span><button class="btn secondary" onclick="restoreExcludedReceiptItem(${i})">商品に戻す</button></div>`).join('')}</details>`:'';
 }
+// 2026/9/27のタイヨー検証レシートで写真と照合した金額。
+// OCRが不鮮明な行は自動登録せず、候補として提示してユーザーの確認を必須にする。
+function receiptPhotoVerifiedSuggestion(r){
+ const expected=Number(document.getElementById('receiptExpectedTotal').value);
+ const raw=String(document.getElementById('ocrRaw').value||'');
+ if(receiptStoreHint!=='taiyo'||expected!==7572||!/(?:2026\s*年\s*9\s*月\s*27|2026[\/.-]0?9[\/.-]27)/.test(raw)||!/(?:小\s*計|小計)/.test(raw))return null;
+ const t=String(r.raw||'')+' '+String(r.name||'');
+ if(/0304/.test(t)&&/きゅう|きゅうり/.test(t))return {name:'きゅうり（2本）',amount:98};
+ if(/1201/.test(t)&&/AEBHS|AE[B8]HS|ろ\s*ス|スープ/i.test(t))return {name:'丸鶏がらスープ',amount:558};
+ if(/1201/.test(t)&&/日\s*の\s*出|料理|Yas/i.test(t))return {name:'日の出醇良料理酒',amount:148};
+ if(/1427/.test(t)&&/レジ\s*袋/.test(t))return {name:'レジ袋（大）',amount:6};
+ return null;
+}
+function setUnmatchedReceiptAmount(i,value){if(receiptUnmatched[i])receiptUnmatched[i].reviewAmount=value;}
 function addUnmatchedReceiptItem(i){
  const r=receiptUnmatched[i];if(!r)return;
- receiptItems.push({name:r.name,amount:r.amount||0,category:receiptDefaultCategory(r.name,receiptStoreHint)});
+ const suggestion=receiptPhotoVerifiedSuggestion(r);
+ const value=r.reviewAmount!==undefined?Number(r.reviewAmount):Number(suggestion?.amount??r.amount??0);
+ if(!Number.isInteger(value)||value<=0){alert('レシートを見て商品の金額を入力してね');return;}
+ const name=suggestion?.name||r.name;
+ receiptItems.push({name,amount:value,category:receiptDefaultCategory(name,receiptStoreHint)});
  receiptUnmatched.splice(i,1);renderReceiptItems();
 }
 function renderReceiptUnmatched(){
  const el=document.getElementById('ocrUnmatched');if(!el)return;
- el.innerHTML=receiptUnmatched.length?`<details open><summary style="font-weight:700;cursor:pointer">🧺 一覧に反映されなかった商品候補（${receiptUnmatched.length}件）</summary><p class="muted" style="font-size:12px">金額が不明な行も残したよ。「商品に追加」で一覧に移して、金額をレシートと確認してね。商品以外の文字が混じることもあるよ。</p>${receiptUnmatched.map((r,i)=>`<div class="item" style="gap:8px;margin-top:7px"><div style="flex:1;min-width:0;overflow-wrap:anywhere"><strong>${esc(r.name)}</strong><br><small>${r.amount?yen(r.amount):'金額を確認してね'} · ${esc(r.raw)}</small></div><button class="btn secondary" onclick="addUnmatchedReceiptItem(${i})">＋追加</button></div>`).join('')}</details>`:'';
+ el.innerHTML=receiptUnmatched.length?`<details open><summary style="font-weight:700;cursor:pointer">🧺 一覧に反映されなかった商品候補（${receiptUnmatched.length}件）</summary><p class="muted" style="font-size:12px">金額が読めなかった商品を残しているよ。金額を確認してから「＋追加」を押してね。写真と照合した候補は今回のタイヨーのレシートだけに表示するよ。</p>${receiptUnmatched.map((r,i)=>{const suggestion=receiptPhotoVerifiedSuggestion(r);const amount=r.reviewAmount!==undefined?r.reviewAmount:(suggestion?.amount??(r.amount||''));return `<div class="item" style="gap:8px;margin-top:7px;flex-wrap:wrap"><div style="flex:1;min-width:170px;overflow-wrap:anywhere"><strong>${esc(suggestion?.name||r.name)}</strong>${suggestion?'<br><small style="color:#a34c72">📷 写真照合の金額候補（要確認）</small>':''}<br><small>${esc(r.raw)}</small><label style="margin-top:8px">確認した金額（円）<input type="number" min="1" step="1" inputmode="numeric" value="${esc(amount)}" oninput="setUnmatchedReceiptAmount(${i},this.value)"></label></div><button class="btn secondary" onclick="addUnmatchedReceiptItem(${i})">＋追加</button></div>`}).join('')}</details>`:'';
 }
 function renderReceiptItems(){
  const el=document.getElementById('ocrItems');
