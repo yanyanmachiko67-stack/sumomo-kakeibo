@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>すもも家計簿 Ver.10.28（店舗判定・診断強化）</title>
+<title>すもも家計簿 Ver.10.29（商品行・値引き改善）</title>
 <style>
 :root{--pink:#e88ca8;--pink2:#f7dce5;--ink:#3d3438;--muted:#8b7d83;--bg:#fff8fa;--card:#fff;--line:#eadde2;--green:#79b89a;--blue:#8caed8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
@@ -27,7 +27,7 @@ h2{font-size:18px;margin:4px 0 12px} h3{font-size:15px;margin:4px 0 10px}
 </head>
 <body>
 <div class="app">
-  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.28（店舗判定・診断強化） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
+  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.29（商品行・値引き改善） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
   <nav>
     <button class="tab active" data-page="home">ホーム</button>
     <button class="tab" data-page="add">支出を追加</button>
@@ -661,27 +661,16 @@ function receiptDefaultCategory(name,storeHint){
  return guessedCategory(name);
 }
 function detectReceiptDiscount(lines){
- // 値引き明細のみ対象。支払・税額・商品金額を値引きと誤認しない。
+ // 値引き額は明細行から一度だけ拾う。数量説明の「3点 2回 -52」は重複計上しない。
  let total=0;
  for(let i=0;i<lines.length;i++){
-  const line=String(lines[i]).replace(/[，,]/g,'').trim();
-  const isDiscount=/(?:割\s*引|値\s*引|C割|クーポン|ｸｰﾎﾟﾝ|M001\)|CHI\s*\(\s*0?1\s*\))/i.test(line);
-  if(!isDiscount||/(?:小計|合計|消費税|対象税額|お預|お釣)/.test(line))continue;
-  // ¥-100、-¥100、￥−１００、¥100 の順に対応。最後の金額を採用。
-  const normalized=line.normalize('NFKC').replace(/[−ー‐‑–—]/g,'-');
-  let matches=[...normalized.matchAll(/[¥￥]\s*-\s*(\d{1,6})(?!\d)|-\s*[¥￥]\s*(\d{1,6})(?!\d)/g)];
-  if(matches.length){const m=matches[matches.length-1];total+=Number(m[1]||m[2]);continue;}
-  // 値引きラベルと同じ行にある正の金額は明示的な値引きとして扱う。
-  const plain=normalized.match(/[¥￥]\s*(\d{1,6})\s*$/);
-  if(plain){total+=Number(plain[1]);continue;}
-  const trailingNegative=normalized.match(/(?:^|\s)-\s*(\d{1,5})\s*$/);
-  if(trailingNegative){total+=Number(trailingNegative[1]);continue;}
-  // 別行の金額はマイナス表記の場合だけ採用。
-  if(i+1<lines.length){
-   const next=String(lines[i+1]).normalize('NFKC').replace(/[−ー‐‑–—]/g,'-').trim();
-   const m=next.match(/^(?:[¥￥]\s*-|-\s*[¥￥]?)\s*(\d{1,6})\s*$/);
-   if(m)total+=Number(m[1]);
-  }
+  const line=String(lines[i]).normalize('NFKC').replace(/[−ー‐‑–—]/g,'-');
+  if(/(?:小計|合計|消費税|対象額|お預|お釣)/.test(line))continue;
+  const label=/(?:割\s*引|値\s*引|クーポン|M[O0]{2}1\)|M[O0]{2}1\s*\)|CHI\s*\()/i.test(line);
+  if(!label)continue;
+  const matches=[...line.matchAll(/(?:[¥￥]\s*)?-\s*(\d{1,5})(?!\d)/g)];
+  if(matches.length)total+=Number(matches[matches.length-1][1]);
+  else {const positive=line.match(/[¥￥]\s*(\d{1,5})\s*$/);if(positive)total+=Number(positive[1]);}
  }
  return total;
 }
@@ -739,27 +728,21 @@ function parseStoreRowReceipt(lines,store){
     }else{diagnostics.push('未抽出: '+raw);continue}
    }
   }else if(store==='taiyo'){
-   // タイヨー: OCRは「¥」を「\」「|」「空白」に読み違える。
-   // 外8 / 内10などの税区分で始まる行だけを対象にする。
+   // 税区分「外8」が「28」「H8」「分8」等に崩れても、商品コードと名前を手がかりにする。
    const taiyo=line.normalize('NFKC').replace(/[，,]/g,'').replace(/[￥]/g,'¥');
-   // OCRが税区分を落とした商品（例: 301 小松菜 ¥138）も候補にする。
-   const head=taiyo.match(/^\s*[外内下力分£]\s*(?:8|10|18)\s*(.*)$/u);
-   const bare=taiyo.match(/^\s*(\d{3,4})\s+(.+)$/u);
-   if((head||bare) && !/(?:20\d{2}\s*年|\d{1,2}\s*月\s*\d{1,2}\s*日|\d{1,2}:\d{2}|#\s*\d{4,}|No[:：]|レシート番号)/i.test(taiyo)){
-    let body=(head?head[1]:bare[0]).trim();
-    // 先頭の商品分類コード。OCRでは 0303 / 0 303 / 8 0303 などに崩れる。
+   const head=taiyo.match(/^\s*(?:[外内下力分£H]|2)\s*(?:8|10|18)\s*(.*)$/iu);
+   const bare=taiyo.match(/^\s*(?:0\s*)?\d{3,4}\s+.+$/u);
+   if((head||bare)&&!/(?:20\d{2}\s*年|\d{1,2}\s*月\s*\d{1,2}\s*日|\d{1,2}:\d{2}|#\s*\d{4,}|No[:：]|レシート番号)/i.test(taiyo)){
+    let body=(head?head[1]:taiyo).trim();
     const codeMatch=body.match(/^(?:0\s*)?(\d{3,4})\s+(.+)$/u);
     if(codeMatch){code=codeMatch[1];body=codeMatch[2];}
-    // 通貨記号なし・バックスラッシュ誤読・末尾の単独価格にも対応。
-    const priceMatch=body.match(/^(.+?)\s*(?:[¥￥\\|]\s*|\s+)(\d{2,5})\s*[;；。.]?\s*$/u);
-    if(priceMatch){
-     name=priceMatch[1].trim();amount=Number(priceMatch[2]);match=priceMatch;
-    }else{
-     // OCRの末尾が「¥8」「¥」などで切れても、名前を候補に残す。
-     const candidate=body.replace(/(?:[¥￥\\|]\s*\d{0,1})\s*$/u,'').trim();
-     if(candidate && /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(candidate)){
-      receiptUnmatched.push({name:candidate,amount:0,raw});
-     }
+    // 金額が「\158」「¥158」「 158」のいずれでも取り込む。
+    const priceMatch=body.match(/^(.+?)(?:\s*[¥￥\\|]\s*|\s+)(\d{2,5})\s*[;；。.]?\s*$/u);
+    if(priceMatch){name=priceMatch[1].trim();amount=Number(priceMatch[2]);match=priceMatch;}
+    else {
+     const candidate=body.replace(/(?:[¥￥\\|]\s*[\da-z]{0,4})\s*$/iu,'').trim();
+     if(candidate&&code&&/[^\d\s]/u.test(candidate))
+      receiptUnmatched.push({name:/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(candidate)?candidate:'商品名を確認（コード '+code+'）',amount:0,raw});
     }
    }
   }
