@@ -140,7 +140,7 @@ h2{font-size:18px;margin:4px 0 12px} h3{font-size:15px;margin:4px 0 10px}
           <input id="receiptExpectedTotal" type="number" min="1" step="1" inputmode="numeric" placeholder="例：1938" oninput="receiptAutoTotal=false;receiptTotalEstimated=false;updateReceiptTotal()">
           <small id="receiptTotalSourceNote" class="muted" style="display:block;margin-top:5px"></small><small class="muted">支払総額は読み取れた場合に自動入力するよ。商品金額が税抜の場合は、認識した外税をカテゴリ別に配分して照合するよ。必ずレシートと見比べてね。</small>
         </div>
-        <div style="margin:10px 0"><label for="receiptStoreSelect">🏬 店舗（OCRで違ったら選んでね）</label><select id="receiptStoreSelect" onchange="changeReceiptStore(this.value)"><option value="">自動判定・その他</option><option value="taiyo">タイヨー</option><option value="birthday">バースデイ</option><option value="nishimatsuya">西松屋</option></select></div><div id="ocrItems" class="list"></div>
+        <div style="margin:10px 0"><label for="receiptStoreSelect">🏬 店舗（自動判定・違ったら手動で選んでね）</label><select id="receiptStoreSelect" onchange="changeReceiptStore(this.value)"><option value="">自動判定・その他</option><option value="taiyo">タイヨー</option><option value="birthday">バースデイ</option><option value="nishimatsuya">西松屋</option></select></div><div id="ocrItems" class="list"></div>
         <div id="ocrExcluded" style="margin-top:10px"></div><div id="ocrUnmatched" style="margin-top:12px"></div>
         <div style="margin-top:12px;padding:12px;border:1px solid #edc4d0;border-radius:12px"><label for="receiptDiscountInput">🏷️ レシートの値引き合計（円・確認して変更できるよ）</label><input id="receiptDiscountInput" type="number" min="0" step="1" inputmode="numeric" value="0" oninput="receiptDetectedDiscount=Math.max(0,Number(this.value)||0);updateReceiptTotal()"><small class="muted">値引きが読み取れた場合は自動入力。読み取れなければレシートの金額を入力してね。</small></div>
         <details id="ocrDiagnostic" style="margin-top:12px;padding:12px;border:1px solid #edc4d0;border-radius:12px"><summary style="cursor:pointer;font-weight:700">🔍 商品名の読み取り診断（テスト用）</summary><p class="muted" style="font-size:12px">商品名を探した前後の文字だけ表示するよ。個人情報が含まれることもあるので、スクショを送る前に確認してね。</p><div id="ocrDiagnosticBody" style="font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere"></div></details>
@@ -427,7 +427,7 @@ let receiptUnmatched=[];
 let receiptObjectURL=null;
 function receiptStatus(message){document.getElementById('ocrStatus').textContent=message}
 function previewReceipt(){
- receiptDetectedTax=0;receiptDetectedDiscount=0;document.getElementById('receiptDiscountInput').value='0';receiptStoreHint='';receiptAutoTotal=false;receiptTotalEstimated=false;document.getElementById('receiptExpectedTotal').value='';
+ receiptDetectedTax=0;receiptDetectedDiscount=0;document.getElementById('receiptDiscountInput').value='0';receiptStoreHint='';receiptStoreManuallyChosen=false;document.getElementById('receiptStoreSelect').value='';receiptAutoTotal=false;receiptTotalEstimated=false;document.getElementById('receiptExpectedTotal').value='';
  const file=document.getElementById('receiptImage').files[0];
  const img=document.getElementById('receiptPreview');
  if(receiptObjectURL)URL.revokeObjectURL(receiptObjectURL);
@@ -471,6 +471,7 @@ function guessedCategory(name){
 let receiptDetectedTax=0;
 let receiptDetectedDiscount=0;
 let receiptStoreHint="";
+let receiptStoreManuallyChosen=false;
 let receiptAutoTotal=false;
 let receiptTotalEstimated=false;
 const receiptNonItem=/(?:合\s*計|小\s*計|総\s*額|お\s*預|お\s*釣|釣\s*銭|消費税|内\s*税|外\s*税|税\s*率|課税|対象額|値引|割引|ポイント|クレジット|カード|現金|電子マネー|領収|お買上|お買い上げ|お支払|支払金額|税込|税抜|レジ|担当|TEL|電話|〒|http|www\.|No\.|伝票|レシート|取引|会員|商品点数|合計点数|明細|承認|端末|税額|釣銭|おつり|お預り|買上点数|お買上金額)/i;
@@ -788,6 +789,14 @@ function parseStoreRowReceipt(lines,store){
  }
  return {parsed,excluded,diagnostics:diagnostics.join('\n')||'店舗別の形式に一致する商品行がなかったよ。'};
 }
+function detectReceiptStoreFromOCR(raw){
+ // OCR sometimes inserts spaces, punctuation or line breaks into shop names.
+ const t=String(raw||'').normalize('NFKC').replace(/[\s　・･.,，。:：\-ー_]/g,'').toLowerCase();
+ if(/(?:バースデイ|バースディ|birthday|ばーすでい)/i.test(t))return 'birthday';
+ if(/(?:西松屋|にしまつや|nishimatsuya)/i.test(t))return 'nishimatsuya';
+ if(/(?:タイヨー|タイヨ|たいよー|taiyo)/i.test(t))return 'taiyo';
+ return '';
+}
 function parseReceiptText(){
  const raw=document.getElementById('ocrRaw').value;
  const lines=raw.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
@@ -797,7 +806,7 @@ function parseReceiptText(){
  const detected=detectReceiptAmounts(lines);
  // 金額は明示的な合計・クレジット行を優先。読み取れないときは
  // 「小計」「外税」の近傍にある金額を使って照合する（推測額は自動確定しない）。
-  receiptStoreHint=document.getElementById('receiptStoreSelect').value||(/バースデイ|birthday/i.test(raw)?'birthday':/西松屋/i.test(raw)?'nishimatsuya':/タイヨー|タイヨーネ/i.test(raw)?'taiyo':'');
+  receiptStoreHint=receiptStoreManuallyChosen?document.getElementById('receiptStoreSelect').value:detectReceiptStoreFromOCR(raw);
   receiptDetectedDiscount=detectReceiptDiscount(lines);
   document.getElementById('receiptDiscountInput').value=receiptDetectedDiscount;
   document.getElementById('receiptStoreSelect').value=receiptStoreHint;
@@ -821,6 +830,16 @@ function parseReceiptText(){
    renderReceiptItems();
    receiptStatus('商品名候補を金額の直前の行から拾ったよ。文字化けしていたら修正してね 🩷');
    return;
+  }
+ }
+ // If a store name is not legible in OCR, a strong row-format match can identify
+ // the store without relying on the user's manual selection.
+ if(!receiptStoreHint && !receiptStoreManuallyChosen && unitRowCount<2){
+  const candidates=['taiyo','birthday'].map(store=>({store,result:parseStoreRowReceipt(lines,store)}));
+  candidates.sort((a,b)=>b.result.parsed.length-a.result.parsed.length);
+  if(candidates[0].result.parsed.length>=3 && candidates[0].result.parsed.length>=candidates[1].result.parsed.length+2){
+   receiptStoreHint=candidates[0].store;
+   document.getElementById('receiptStoreSelect').value=receiptStoreHint;
   }
  }
  // 店舗のレシートは「コード 商品名 数量 金額」が1行に並ぶことがある。
@@ -901,7 +920,7 @@ function parseReceiptText(){
  receiptStatus('読み取り候補を表示したよ。除外候補と商品名・税込金額を確認してね 🩷');
 }
 function changeReceiptStore(value){
- receiptStoreHint=value;
+ receiptStoreManuallyChosen=true;receiptStoreHint=value;
  const raw=document.getElementById('ocrRaw').value;
  if(!raw.trim())return;
  // 店舗の選び直し後は既存の候補を消さず、再解析して商品名を取り直す。
