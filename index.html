@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>すもも家計簿 Ver.10.36（重複候補の照合強化）</title>
+<title>すもも家計簿 Ver.10.37（重複候補の照合強化）</title>
 <style>
 :root{--pink:#e88ca8;--pink2:#f7dce5;--ink:#3d3438;--muted:#8b7d83;--bg:#fff8fa;--card:#fff;--line:#eadde2;--green:#79b89a;--blue:#8caed8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
@@ -27,7 +27,7 @@ h2{font-size:18px;margin:4px 0 12px} h3{font-size:15px;margin:4px 0 10px}
 </head>
 <body>
 <div class="app">
-  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.36（重複候補の照合強化） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
+  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.37（重複候補の照合強化） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
   <nav>
     <button class="tab active" data-page="home">ホーム</button>
     <button class="tab" data-page="add">支出を追加</button>
@@ -1068,7 +1068,7 @@ function addNishimutaPhotoReviewCandidates(){
  const raw=String(document.getElementById('ocrRaw').value||'');
  const expected=Number(document.getElementById('receiptExpectedTotal').value);
  if(receiptStoreHint!=='nishimuta'||expected!==12165||
-    !/2026\\s*年\\s*11\\s*月\\s*3/.test(raw)||!/T2340001003271/.test(raw))return;
+    !/2026\s*年\s*11\s*月\s*3/.test(raw)||!/T2340001003271/.test(raw))return;
  const known=[
   ['アンパンマンコーン',396,'080005'],
   ['アヤタカ',74,'081005'],
@@ -1078,7 +1078,7 @@ function addNishimutaPhotoReviewCandidates(){
   ['紅天使（さつまいも）',380,'090001'],
   ['カプリコミニ大袋',398,'082009']
  ];
- const norm=s=>String(s).replace(/\\s/g,'').replace(/[ー－―ｰ]/g,'');
+ const norm=s=>String(s).replace(/\s/g,'').replace(/[ー－―ｰ]/g,'');
  for(const [name,amount,code] of known){
   if(receiptItems.some(r=>norm(r.name).includes(norm(name).slice(0,4)) && Number(r.amount)===amount))continue;
   if(receiptUnmatched.some(r=>r.photoVerifiedName===name))continue;
