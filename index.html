@@ -1102,10 +1102,20 @@ function renderReceiptItems(){
  renderReceiptUnmatched();
  updateReceiptTotal();
 }
+// 西松屋では「8%外税額」と「消費税等」の同じ税額をOCRが二重取得することがある。
+// 税抜商品合計とレシート支払総額で半額が一致する場合に限り補正する。
+function receiptEffectiveTax(subtotal,expected){
+ const detected=Number(receiptDetectedTax)||0;
+ if(receiptStoreHint==='nishimatsuya' && detected>0 && detected%2===0 &&
+    Number.isSafeInteger(expected) && expected>0 && subtotal+detected/2===expected){
+  return detected/2;
+ }
+ return detected;
+}
 function receiptReconciled(){
  const subtotal=receiptItems.reduce((sum,r)=>sum+(Number(r.amount)||0),0);
  const expected=Number(document.getElementById('receiptExpectedTotal').value);
- const tax=Number(receiptDetectedTax)||0;
+ const tax=receiptEffectiveTax(subtotal,expected);
  // Only add an explicitly detected external-tax line when it exactly
  // reconciles the receipt. Never silently infer missing tax or discounts.
  const discount=Number(receiptDetectedDiscount)||0;
@@ -1137,12 +1147,13 @@ function updateReceiptTotal(){
  const itemSum=receiptItems.reduce((sum,r)=>sum+(Number(r.amount)||0),0);
  const validItems=receiptItems.length>=2&&receiptItems.every(r=>Number.isSafeInteger(Number(r.amount))&&Number(r.amount)>0);
  if(validItems && receiptStoreHint!=='taiyo' && (!totalField.value || (receiptAutoTotal&&receiptTotalEstimated))){
-  const proposed=itemSum+(Number(receiptDetectedTax)||0)-(Number(receiptDetectedDiscount)||0);
+  const proposed=itemSum+receiptEffectiveTax(itemSum,Number(totalField.value))-(Number(receiptDetectedDiscount)||0);
   if(Number.isSafeInteger(proposed)&&proposed>0){totalField.value=proposed;receiptAutoTotal=true;receiptTotalEstimated=true;}
  }
  const {subtotal,expected,tax,discount,total,useTax,useDiscount}=receiptReconciled();
  document.getElementById('ocrTotal').textContent=((receiptStoreHint==='nishimuta'||receiptStoreHint==='nishimatsuya')?'商品合計（税抜） ':'商品合計 ')+yen(subtotal);
- document.getElementById('ocrTaxDetail').textContent=(useTax||useDiscount)?`${useTax?'外税 +'+yen(tax)+' ':''}${useDiscount?'値引 −'+yen(discount):''} → 支払合計 ${yen(total)}（カテゴリ別に配分）`:[receiptDetectedTax>0?'外税候補 '+yen(receiptDetectedTax):'',receiptDetectedDiscount>0?'値引候補 −'+yen(receiptDetectedDiscount):''].filter(Boolean).join(' / ')+'（合計と照合できるまで加減算しないよ）';
+ document.getElementById('ocrTaxDetail').textContent=(useTax||useDiscount)?`${useTax?'外税 +'+yen(tax)+' ':''}${useDiscount?'値引 −'+yen(discount):''} → 支払合計 ${yen(total)}（カテゴリ別に配分）`:[receiptDetectedTax>0?'外税候補 '+yen(receiptEffectiveTax(subtotal,expected)):'',receiptDetectedDiscount>0?'値引候補 −'+yen(receiptDetectedDiscount):''].filter(Boolean).join(' / ')+'（合計と照合できるまで加減算しないよ）';
+ if(receiptStoreHint==='nishimatsuya'&&receiptDetectedTax>tax&&useTax){document.getElementById('ocrTaxDetail').textContent+=' ／ 同じ税額の重複読取を除外';}
  // ニシムタの税抜小計と外税を分けて照合。差額だけで商品を自動生成しない。
  if(receiptStoreHint==='nishimuta'&&expected>0){
   const taxValue=Number(receiptDetectedTax)||0;
