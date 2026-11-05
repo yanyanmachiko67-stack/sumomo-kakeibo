@@ -828,10 +828,15 @@ function parseStoreRowReceipt(lines,store){
 function detectReceiptStoreWithReason(raw,lines){
  const compact=String(raw||'').normalize('NFKC').replace(/[\s　・･.,，。:：\-ー_]/g,'').toLowerCase();
  if(/(?:バースデイ|バースディ|birthday|ばーすでい)/i.test(compact))return {store:'birthday',reason:'店名の文字を検出'};
- if(/(?:西松屋|にしまつや|nishimatsuya)/i.test(compact))return {store:'nishimatsuya',reason:'店名の文字を検出'};
+ if(/(?:西松屋|西松尾|西松層|西松屋チェーン|にしまつや|nishimatsuya)/i.test(compact)||(/baby(?:and|&)kids/i.test(compact)&&/松/.test(compact)))return {store:'nishimatsuya',reason:'店名・ロゴの文字を検出'};
  if(/(?:ニシムタ|にしむた|nishimuta|スーパーセンター)/i.test(compact))return {store:'nishimuta',reason:'店名の文字を検出'};
  if(/(?:タイヨ|たいよ|taiyo)/i.test(compact))return {store:'taiyo',reason:'店名の文字を検出'};
  // 店名がOCRで欠けた場合は商品行の特徴で判定。複数行の一致が必須。
+ // 西松屋の領収証は「単249×2個」のような数量行と13桁の商品コードが特徴。
+ // 店名のOCRが崩れても、単価×数量行が2行以上あれば優先して推定する。
+ const nishimatsuUnitRows=lines.filter(row=>/(?:単\s*[¥￥]?\s*\d{2,5}\s*[x×Xｘ]\s*\d+|\d{2,5}\s*[x×Xｘ]\s*\d+\s*個)/i.test(row.normalize('NFKC'))).length;
+ const nishimatsuCodes=lines.filter(row=>/(?:^|\s)\d{12,14}(?:\s|$)/.test(row.normalize('NFKC'))).length;
+ if(nishimatsuUnitRows>=2&&nishimatsuCodes>=2)return {store:'nishimatsuya',reason:'単価×数量の行と長い商品コードを検出'};
  const nishimutaRows=lines.filter(row=>/(?:^|[^\d])(?:04|06|08|09)\d{4}\s*[^\n]*[¥￥\\]\s*\d/i.test(row.normalize('NFKC'))).length;
  if(nishimutaRows>=3)return {store:'nishimuta',reason:'6桁の商品コード＋金額を'+nishimutaRows+'行検出'};
  const taiyoRows=lines.filter(row=>/^\s*[外内下力分£]\s*(?:8|10|18)\s*(?:0\s*)?\d{3,4}\s+.+/u.test(row.normalize('NFKC'))).length;
@@ -1136,7 +1141,7 @@ function updateReceiptTotal(){
   if(Number.isSafeInteger(proposed)&&proposed>0){totalField.value=proposed;receiptAutoTotal=true;receiptTotalEstimated=true;}
  }
  const {subtotal,expected,tax,discount,total,useTax,useDiscount}=receiptReconciled();
- document.getElementById('ocrTotal').textContent=(receiptStoreHint==='nishimuta'?'商品合計（税抜） ':'商品合計 ')+yen(subtotal);
+ document.getElementById('ocrTotal').textContent=((receiptStoreHint==='nishimuta'||receiptStoreHint==='nishimatsuya')?'商品合計（税抜） ':'商品合計 ')+yen(subtotal);
  document.getElementById('ocrTaxDetail').textContent=(useTax||useDiscount)?`${useTax?'外税 +'+yen(tax)+' ':''}${useDiscount?'値引 −'+yen(discount):''} → 支払合計 ${yen(total)}（カテゴリ別に配分）`:[receiptDetectedTax>0?'外税候補 '+yen(receiptDetectedTax):'',receiptDetectedDiscount>0?'値引候補 −'+yen(receiptDetectedDiscount):''].filter(Boolean).join(' / ')+'（合計と照合できるまで加減算しないよ）';
  // ニシムタの税抜小計と外税を分けて照合。差額だけで商品を自動生成しない。
  if(receiptStoreHint==='nishimuta'&&expected>0){
