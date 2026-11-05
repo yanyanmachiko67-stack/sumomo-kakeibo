@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>すもも家計簿 Ver.10.37（重複候補の照合強化）</title>
+<title>すもも家計簿 Ver.10.38（税抜小計・外税照合）</title>
 <style>
 :root{--pink:#e88ca8;--pink2:#f7dce5;--ink:#3d3438;--muted:#8b7d83;--bg:#fff8fa;--card:#fff;--line:#eadde2;--green:#79b89a;--blue:#8caed8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
@@ -27,7 +27,7 @@ h2{font-size:18px;margin:4px 0 12px} h3{font-size:15px;margin:4px 0 10px}
 </head>
 <body>
 <div class="app">
-  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.37（重複候補の照合強化） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
+  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.38（税抜小計・外税照合） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
   <nav>
     <button class="tab active" data-page="home">ホーム</button>
     <button class="tab" data-page="add">支出を追加</button>
@@ -1088,7 +1088,7 @@ function addNishimutaPhotoReviewCandidates(){
 }
 function renderReceiptItems(){
  const el=document.getElementById('ocrItems');
- el.innerHTML=receiptItems.length?receiptItems.map((r,i)=>`<div class="card" style="margin:0;padding:10px;background:var(--bg)"><div class="formgrid" style="gap:7px"><div><label>商品名</label><input value="${esc(r.name)}" oninput="receiptItems[${i}].name=this.value">${r.photoReview?`<small style="color:#a34c72">📷 写真照合の候補・金額を確認してね</small>`:``}${Array.isArray(r.candidates)&&r.candidates.length?`<details style="margin-top:7px"><summary style="cursor:pointer;font-size:13px;color:#a34c72;font-weight:700">🔍 候補から選ぶ（${r.candidates.length}件）</summary><div class="list" style="margin-top:8px">${r.candidates.map((name,k)=>`<button type="button" class="btn secondary" style="text-align:left;white-space:normal;overflow-wrap:anywhere;font-weight:500" onclick="selectReceiptCandidate(${i},${k})">${esc(name)}</button>`).join('')}</div><small class="muted">文字化けがあれば上の商品名欄で直せるよ</small></details>`:''}</div><div><label>税込金額（円）</label><input type="number" min="0" step="1" inputmode="numeric" value="${esc(r.amount)}" oninput="receiptItems[${i}].amount=Number(this.value);updateReceiptTotal()"></div><div><label>カテゴリ</label><select onchange="receiptItems[${i}].category=this.value">${cats().map(c=>`<option value="${esc(c.name)}" ${r.category===c.name?'selected':''}>${esc(c.name)}</option>`).join('')}</select></div><div style="display:flex;align-items:end"><button class="btn secondary" style="width:100%" onclick="receiptItems.splice(${i},1);renderReceiptItems()">削除</button></div></div></div>`).join(''):'<div class="empty">商品がまだないよ。追加してね 🌷</div>';
+ el.innerHTML=receiptItems.length?receiptItems.map((r,i)=>`<div class="card" style="margin:0;padding:10px;background:var(--bg)"><div class="formgrid" style="gap:7px"><div><label>商品名</label><input value="${esc(r.name)}" oninput="receiptItems[${i}].name=this.value">${r.photoReview?`<small style="color:#a34c72">📷 写真照合の候補・金額を確認してね</small>`:``}${Array.isArray(r.candidates)&&r.candidates.length?`<details style="margin-top:7px"><summary style="cursor:pointer;font-size:13px;color:#a34c72;font-weight:700">🔍 候補から選ぶ（${r.candidates.length}件）</summary><div class="list" style="margin-top:8px">${r.candidates.map((name,k)=>`<button type="button" class="btn secondary" style="text-align:left;white-space:normal;overflow-wrap:anywhere;font-weight:500" onclick="selectReceiptCandidate(${i},${k})">${esc(name)}</button>`).join('')}</div><small class="muted">文字化けがあれば上の商品名欄で直せるよ</small></details>`:''}</div><div><label>${receiptStoreHint==='nishimuta'?'レシート記載の税抜金額（円）':'商品金額（円・レシート表記）'}</label><input type="number" min="0" step="1" inputmode="numeric" value="${esc(r.amount)}" oninput="receiptItems[${i}].amount=Number(this.value);updateReceiptTotal()"></div><div><label>カテゴリ</label><select onchange="receiptItems[${i}].category=this.value">${cats().map(c=>`<option value="${esc(c.name)}" ${r.category===c.name?'selected':''}>${esc(c.name)}</option>`).join('')}</select></div><div style="display:flex;align-items:end"><button class="btn secondary" style="width:100%" onclick="receiptItems.splice(${i},1);renderReceiptItems()">削除</button></div></div></div>`).join(''):'<div class="empty">商品がまだないよ。追加してね 🌷</div>';
  addNishimutaPhotoReviewCandidates();
  removeAlreadyListedReceiptCandidates();
  renderReceiptExcluded();
@@ -1134,8 +1134,18 @@ function updateReceiptTotal(){
   if(Number.isSafeInteger(proposed)&&proposed>0){totalField.value=proposed;receiptAutoTotal=true;receiptTotalEstimated=true;}
  }
  const {subtotal,expected,tax,discount,total,useTax,useDiscount}=receiptReconciled();
- document.getElementById('ocrTotal').textContent='商品合計 '+yen(subtotal);
+ document.getElementById('ocrTotal').textContent=(receiptStoreHint==='nishimuta'?'商品合計（税抜） ':'商品合計 ')+yen(subtotal);
  document.getElementById('ocrTaxDetail').textContent=(useTax||useDiscount)?`${useTax?'外税 +'+yen(tax)+' ':''}${useDiscount?'値引 −'+yen(discount):''} → 支払合計 ${yen(total)}（カテゴリ別に配分）`:[receiptDetectedTax>0?'外税候補 '+yen(receiptDetectedTax):'',receiptDetectedDiscount>0?'値引候補 −'+yen(receiptDetectedDiscount):''].filter(Boolean).join(' / ')+'（合計と照合できるまで加減算しないよ）';
+ // ニシムタの税抜小計と外税を分けて照合。差額だけで商品を自動生成しない。
+ if(receiptStoreHint==='nishimuta'&&expected>0){
+  const taxValue=Number(receiptDetectedTax)||0;
+  const targetSubtotal=taxValue>0?expected-taxValue:0;
+  const gap=targetSubtotal-subtotal;
+  const taxDetail=document.getElementById('ocrTaxDetail');
+  if(taxValue>0&&targetSubtotal>0){
+   taxDetail.textContent=(useTax?'外税 +'+yen(tax)+' → 支払合計 '+yen(total)+'（カテゴリ別に配分）':'外税候補 +'+yen(taxValue)+'（一致するまで未加算）')+' ／ 税抜目標 '+yen(targetSubtotal)+(gap===0?' ／ ✅ 税抜小計一致':gap>0?' ／ 税抜であと'+yen(gap)+'不足': ' ／ 税抜で'+yen(-gap)+'超過');
+  }
+ }
  const valid=Number.isSafeInteger(expected)&&expected>0;
  const matches=valid&&total===expected&&receiptItems.length>0&&receiptItems.every(r=>r.name.trim()&&r.name!=='商品名を確認してね'&&Number.isSafeInteger(Number(r.amount))&&Number(r.amount)>0);
  const amountMatches=valid&&total===expected;
