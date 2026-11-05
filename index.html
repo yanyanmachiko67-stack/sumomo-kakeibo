@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>すもも家計簿 Ver.10.46（レシート判定・二重登録防止）</title>
+<title>すもも家計簿 Ver.10.47（レシート一括カテゴリ分類）</title>
 <style>
 :root{--pink:#e88ca8;--pink2:#f7dce5;--ink:#3d3438;--muted:#8b7d83;--bg:#fff8fa;--card:#fff;--line:#eadde2;--green:#79b89a;--blue:#8caed8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
@@ -27,7 +27,7 @@ h2{font-size:18px;margin:4px 0 12px} h3{font-size:15px;margin:4px 0 10px}
 </head>
 <body>
 <div class="app">
-  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.46（レシート判定・二重登録防止） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
+  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.47（レシート一括カテゴリ分類） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
   <nav>
     <button class="tab active" data-page="home">ホーム</button>
     <button class="tab" data-page="add">支出を追加</button>
@@ -141,7 +141,7 @@ h2{font-size:18px;margin:4px 0 12px} h3{font-size:15px;margin:4px 0 10px}
           <input id="receiptExpectedTotal" type="number" min="1" step="1" inputmode="numeric" placeholder="例：1938" oninput="receiptAutoTotal=false;receiptTotalEstimated=false;updateReceiptTotal()">
           <small id="receiptTotalSourceNote" class="muted" style="display:block;margin-top:5px"></small><small class="muted">支払総額は読み取れた場合に自動入力するよ。商品金額が税抜の場合は、認識した外税をカテゴリ別に配分して照合するよ。必ずレシートと見比べてね。</small>
         </div>
-        <div style="margin:10px 0"><label for="receiptStoreSelect">🏬 店舗（自動判定・違ったら手動で選んでね）</label><select id="receiptStoreSelect" onchange="changeReceiptStore(this.value)"><option value="">自動判定・その他</option><option value="taiyo">タイヨー</option><option value="nishimuta">ニシムタ</option><option value="birthday">バースデイ</option><option value="nishimatsuya">西松屋</option><option value="himaraya">ヒマラヤ</option></select></div><div id="receiptStoreDiagnosis" class="muted" style="font-size:12px;margin:5px 0 12px" aria-live="polite"></div><div id="ocrItems" class="list"></div>
+        <div style="margin:10px 0"><label for="receiptStoreSelect">🏬 店舗（自動判定・違ったら手動で選んでね）</label><select id="receiptStoreSelect" onchange="changeReceiptStore(this.value)"><option value="">自動判定・その他</option><option value="taiyo">タイヨー</option><option value="nishimuta">ニシムタ</option><option value="birthday">バースデイ</option><option value="nishimatsuya">西松屋</option><option value="himaraya">ヒマラヤ</option></select></div><div class="card" style="margin:12px 0;padding:12px;background:var(--bg)"><strong>🧺 レシートのカテゴリをまとめて変更</strong><p class="muted" style="margin:6px 0;font-size:12px">商品ごとのカテゴリも下で変更できるよ。すでに分類した商品を残すなら「未分類だけ」を選んでね。</p><div class="formgrid" style="gap:8px"><div><label for="receiptBulkCategory">変更先のカテゴリ</label><select id="receiptBulkCategory"></select></div><div><label for="receiptBulkScope">変更する商品</label><select id="receiptBulkScope"><option value="all">すべての商品</option><option value="unclassified">未分類・要確認だけ</option><option value="selected">今のカテゴリを指定</option></select></div><div id="receiptBulkFromWrap" style="display:none"><label for="receiptBulkFrom">変更前のカテゴリ</label><select id="receiptBulkFrom"></select></div></div><button type="button" class="btn secondary" style="width:100%;margin-top:9px" onclick="bulkSetReceiptCategory()">選んだ商品をまとめて分類する</button><small id="receiptBulkMessage" class="muted" aria-live="polite"></small></div><div id="receiptStoreDiagnosis" class="muted" style="font-size:12px;margin:5px 0 12px" aria-live="polite"></div><div id="ocrItems" class="list"></div>
         <div id="ocrExcluded" style="margin-top:10px"></div><div id="ocrUnmatched" style="margin-top:12px"></div>
         <div style="margin-top:12px;padding:12px;border:1px solid #edc4d0;border-radius:12px"><label for="receiptDiscountInput">🏷️ レシートの値引き合計（円・確認して変更できるよ）</label><input id="receiptDiscountInput" type="number" min="0" step="1" inputmode="numeric" value="0" oninput="receiptDetectedDiscount=Math.max(0,Number(this.value)||0);updateReceiptTotal()"><small class="muted">値引きが読み取れた場合は自動入力。読み取れなければレシートの金額を入力してね。</small></div>
         <details id="ocrDiagnostic" style="margin-top:12px;padding:12px;border:1px solid #edc4d0;border-radius:12px"><summary style="cursor:pointer;font-weight:700">🔍 商品名の読み取り診断（テスト用）</summary><p class="muted" style="font-size:12px">商品名を探した前後の文字だけ表示するよ。個人情報が含まれることもあるので、スクショを送る前に確認してね。</p><div id="ocrDiagnosticBody" style="font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere"></div></details>
@@ -552,7 +552,7 @@ function guessedCategory(name){
  if(/キャットフード|猫砂|ちゅーる|ペットシーツ/.test(name))return 'ペット費';
  if(/ガソリン|軽油|給油/.test(name))return '車関連費';
  if(/洗剤|洗濯|柔軟|ティッシュ|トイレット|ラップ|スポンジ|シャンプー|石鹸|歯磨|ゴミ袋|キッチンペーパー/.test(name))return cats().some(c=>c.name==='日用品')?'日用品':'その他';
- return '食費';
+ return cats().some(c=>c.name==='その他')?'その他':'食費';
 }
 let receiptDetectedTax=0;
 let receiptDetectedDiscount=0;
@@ -1222,7 +1222,33 @@ function addNishimutaPhotoReviewCandidates(){
   receiptUnmatched.push({name,amount:0,reviewAmount:amount,photoVerifiedName:name,raw:'📷 ニシムタのレシート写真で確認（コード '+code+'）。商品名・金額を確認して追加してね'});
  }
 }
+function renderReceiptBulkControls(){
+ const target=document.getElementById('receiptBulkCategory'),from=document.getElementById('receiptBulkFrom'),scope=document.getElementById('receiptBulkScope');
+ if(!target||!from||!scope)return;
+ const choices=cats().map(c=>c.name);
+ for(const select of [target,from]){
+  const previous=select.value;
+  select.innerHTML=choices.map(name=>`<option value="${esc(name)}">${esc(name)}</option>`).join('');
+  if(choices.includes(previous))select.value=previous;
+ }
+ if(!target.dataset.initialized){target.value=choices.includes('食費')?'食費':choices[0]||'';target.dataset.initialized='1';}
+ const wrap=document.getElementById('receiptBulkFromWrap');wrap.style.display=scope.value==='selected'?'block':'none';
+}
+function bulkSetReceiptCategory(){
+ const category=document.getElementById('receiptBulkCategory').value;
+ const scope=document.getElementById('receiptBulkScope').value;
+ const from=document.getElementById('receiptBulkFrom').value;
+ if(!cats().some(c=>c.name===category)){alert('カテゴリを選んでね');return;}
+ const indices=receiptItems.map((item,i)=>({item,i})).filter(({item})=>scope==='all'||(scope==='selected'?item.category===from:!item.category||item.category==='その他'||item.category==='未分類'||item.category==='要確認')).map(x=>x.i);
+ if(!indices.length){document.getElementById('receiptBulkMessage').textContent='変更対象の商品はなかったよ 🌷';return;}
+ if(!confirm(`${indices.length}商品を「${category}」に変更する？\n※商品金額は変わらないよ。`))return;
+ indices.forEach(i=>{receiptItems[i].category=category;});
+ renderReceiptItems();
+ document.getElementById('receiptBulkMessage').textContent=`✅ ${indices.length}商品を「${category}」に変更したよ。商品ごとに変更もできるよ。`;
+}
+document.getElementById('receiptBulkScope').addEventListener('change',renderReceiptBulkControls);
 function renderReceiptItems(){
+ renderReceiptBulkControls();
  const el=document.getElementById('ocrItems');
  el.innerHTML=receiptItems.length?receiptItems.map((r,i)=>`<div class="card" style="margin:0;padding:10px;background:var(--bg)"><div class="formgrid" style="gap:7px"><div><label>商品名</label><input value="${esc(r.name)}" oninput="receiptItems[${i}].name=this.value">${r.photoReview?`<small style="color:#a34c72">📷 写真照合の候補・金額を確認してね</small>`:``}${Array.isArray(r.candidates)&&r.candidates.length?`<details style="margin-top:7px"><summary style="cursor:pointer;font-size:13px;color:#a34c72;font-weight:700">🔍 候補から選ぶ（${r.candidates.length}件）</summary><div class="list" style="margin-top:8px">${r.candidates.map((name,k)=>`<button type="button" class="btn secondary" style="text-align:left;white-space:normal;overflow-wrap:anywhere;font-weight:500" onclick="selectReceiptCandidate(${i},${k})">${esc(name)}</button>`).join('')}</div><small class="muted">文字化けがあれば上の商品名欄で直せるよ</small></details>`:''}</div><div><label>${receiptStoreHint==='nishimuta'?'レシート記載の税抜金額（円）':'商品金額（円・レシート表記）'}</label><input type="number" min="0" step="1" inputmode="numeric" value="${esc(r.amount)}" oninput="receiptItems[${i}].amount=Number(this.value);updateReceiptTotal()"></div><div><label>カテゴリ</label><select onchange="receiptItems[${i}].category=this.value;receiptLearnCategory(receiptItems[${i}].name,this.value)">${cats().map(c=>`<option value="${esc(c.name)}" ${r.category===c.name?'selected':''}>${esc(c.name)}</option>`).join('')}</select></div><div style="display:flex;align-items:end"><button class="btn secondary" style="width:100%" onclick="receiptItems.splice(${i},1);renderReceiptItems()">削除</button></div></div></div>`).join(''):'<div class="empty">商品がまだないよ。追加してね 🌷</div>';
  addNishimutaPhotoReviewCandidates();
