@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>すもも家計簿 Ver.10.47（レシート一括カテゴリ分類）</title>
+<title>すもも家計簿 Ver.10.48（日付・店名連動）</title>
 <style>
 :root{--pink:#e88ca8;--pink2:#f7dce5;--ink:#3d3438;--muted:#8b7d83;--bg:#fff8fa;--card:#fff;--line:#eadde2;--green:#79b89a;--blue:#8caed8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
@@ -27,7 +27,7 @@ h2{font-size:18px;margin:4px 0 12px} h3{font-size:15px;margin:4px 0 10px}
 </head>
 <body>
 <div class="app">
-  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.47（レシート一括カテゴリ分類） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
+  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.48（日付・店名連動） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
   <nav>
     <button class="tab active" data-page="home">ホーム</button>
     <button class="tab" data-page="add">支出を追加</button>
@@ -141,7 +141,7 @@ h2{font-size:18px;margin:4px 0 12px} h3{font-size:15px;margin:4px 0 10px}
           <input id="receiptExpectedTotal" type="number" min="1" step="1" inputmode="numeric" placeholder="例：1938" oninput="receiptAutoTotal=false;receiptTotalEstimated=false;updateReceiptTotal()">
           <small id="receiptTotalSourceNote" class="muted" style="display:block;margin-top:5px"></small><small class="muted">支払総額は読み取れた場合に自動入力するよ。商品金額が税抜の場合は、認識した外税をカテゴリ別に配分して照合するよ。必ずレシートと見比べてね。</small>
         </div>
-        <div style="margin:10px 0"><label for="receiptStoreSelect">🏬 店舗（自動判定・違ったら手動で選んでね）</label><select id="receiptStoreSelect" onchange="changeReceiptStore(this.value)"><option value="">自動判定・その他</option><option value="taiyo">タイヨー</option><option value="nishimuta">ニシムタ</option><option value="birthday">バースデイ</option><option value="nishimatsuya">西松屋</option><option value="himaraya">ヒマラヤ</option></select></div><div class="card" style="margin:12px 0;padding:12px;background:var(--bg)"><strong>🧺 レシートのカテゴリをまとめて変更</strong><p class="muted" style="margin:6px 0;font-size:12px">商品ごとのカテゴリも下で変更できるよ。すでに分類した商品を残すなら「未分類だけ」を選んでね。</p><div class="formgrid" style="gap:8px"><div><label for="receiptBulkCategory">変更先のカテゴリ</label><select id="receiptBulkCategory"></select></div><div><label for="receiptBulkScope">変更する商品</label><select id="receiptBulkScope"><option value="all">すべての商品</option><option value="unclassified">未分類・要確認だけ</option><option value="selected">今のカテゴリを指定</option></select></div><div id="receiptBulkFromWrap" style="display:none"><label for="receiptBulkFrom">変更前のカテゴリ</label><select id="receiptBulkFrom"></select></div></div><button type="button" class="btn secondary" style="width:100%;margin-top:9px" onclick="bulkSetReceiptCategory()">選んだ商品をまとめて分類する</button><small id="receiptBulkMessage" class="muted" aria-live="polite"></small></div><div id="receiptStoreDiagnosis" class="muted" style="font-size:12px;margin:5px 0 12px" aria-live="polite"></div><div id="ocrItems" class="list"></div>
+        <div style="margin:10px 0"><label for="receiptStoreSelect">🏬 店舗（自動判定・違ったら手動で選んでね）</label><select id="receiptStoreSelect" onchange="changeReceiptStore(this.value)"><option value="">自動判定・その他</option><option value="taiyo">タイヨー</option><option value="nishimuta">ニシムタ</option><option value="birthday">バースデイ</option><option value="nishimatsuya">西松屋</option><option value="himaraya">ヒマラヤ</option></select></div><div class="card" style="margin:12px 0;padding:12px;background:var(--bg)"><strong>📅 レシートの日付・店名を支出に引き継ぐ</strong><div class="formgrid" style="gap:8px;margin-top:8px"><div><label for="receiptPurchaseDate">購入日（読み取れなければ空欄）</label><input id="receiptPurchaseDate" type="date"></div><div><label for="receiptPurchaseStore">支出に登録する店名</label><input id="receiptPurchaseStore" placeholder="店舗名を確認してね"></div></div><small id="receiptPurchaseMetaNote" class="muted" aria-live="polite">日付と店名を読み取って表示するよ。間違っていたら直してね。</small></div><div class="card" style="margin:12px 0;padding:12px;background:var(--bg)"><strong>🧺 レシートのカテゴリをまとめて変更</strong><p class="muted" style="margin:6px 0;font-size:12px">商品ごとのカテゴリも下で変更できるよ。すでに分類した商品を残すなら「未分類だけ」を選んでね。</p><div class="formgrid" style="gap:8px"><div><label for="receiptBulkCategory">変更先のカテゴリ</label><select id="receiptBulkCategory"></select></div><div><label for="receiptBulkScope">変更する商品</label><select id="receiptBulkScope"><option value="all">すべての商品</option><option value="unclassified">未分類・要確認だけ</option><option value="selected">今のカテゴリを指定</option></select></div><div id="receiptBulkFromWrap" style="display:none"><label for="receiptBulkFrom">変更前のカテゴリ</label><select id="receiptBulkFrom"></select></div></div><button type="button" class="btn secondary" style="width:100%;margin-top:9px" onclick="bulkSetReceiptCategory()">選んだ商品をまとめて分類する</button><small id="receiptBulkMessage" class="muted" aria-live="polite"></small></div><div id="receiptStoreDiagnosis" class="muted" style="font-size:12px;margin:5px 0 12px" aria-live="polite"></div><div id="ocrItems" class="list"></div>
         <div id="ocrExcluded" style="margin-top:10px"></div><div id="ocrUnmatched" style="margin-top:12px"></div>
         <div style="margin-top:12px;padding:12px;border:1px solid #edc4d0;border-radius:12px"><label for="receiptDiscountInput">🏷️ レシートの値引き合計（円・確認して変更できるよ）</label><input id="receiptDiscountInput" type="number" min="0" step="1" inputmode="numeric" value="0" oninput="receiptDetectedDiscount=Math.max(0,Number(this.value)||0);updateReceiptTotal()"><small class="muted">値引きが読み取れた場合は自動入力。読み取れなければレシートの金額を入力してね。</small></div>
         <details id="ocrDiagnostic" style="margin-top:12px;padding:12px;border:1px solid #edc4d0;border-radius:12px"><summary style="cursor:pointer;font-weight:700">🔍 商品名の読み取り診断（テスト用）</summary><p class="muted" style="font-size:12px">商品名を探した前後の文字だけ表示するよ。個人情報が含まれることもあるので、スクショを送る前に確認してね。</p><div id="ocrDiagnosticBody" style="font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere"></div></details>
@@ -500,7 +500,7 @@ let receiptUnmatched=[];
 let receiptObjectURL=null;
 function receiptStatus(message){document.getElementById('ocrStatus').textContent=message}
 function previewReceipt(){
- receiptDetectedTax=0;receiptDetectedDiscount=0;document.getElementById('receiptDiscountInput').value='0';receiptStoreHint='';receiptStoreManuallyChosen=false;document.getElementById('receiptStoreSelect').value='';document.getElementById('receiptStoreDiagnosis').textContent='';receiptAutoTotal=false;receiptTotalEstimated=false;document.getElementById('receiptExpectedTotal').value='';
+ receiptDetectedTax=0;receiptDetectedDiscount=0;document.getElementById('receiptDiscountInput').value='0';receiptStoreHint='';receiptStoreManuallyChosen=false;document.getElementById('receiptStoreSelect').value='';document.getElementById('receiptStoreDiagnosis').textContent='';receiptAutoTotal=false;receiptTotalEstimated=false;document.getElementById('receiptExpectedTotal').value='';const purchaseDate=document.getElementById('receiptPurchaseDate');if(purchaseDate)purchaseDate.value='';const purchaseStore=document.getElementById('receiptPurchaseStore');if(purchaseStore){purchaseStore.value='';purchaseStore.dataset.autoValue='';}
  const file=document.getElementById('receiptImage').files[0];
  const img=document.getElementById('receiptPreview');
  if(receiptObjectURL)URL.revokeObjectURL(receiptObjectURL);
@@ -962,6 +962,23 @@ function parseDiscountedSingleItemReceipt(lines,expected,discount){
  }
  return null;
 }
+function receiptStoreLabel(value){return ({taiyo:'タイヨー',nishimuta:'ニシムタ',birthday:'バースデイ',nishimatsuya:'西松屋',himaraya:'ヒマラヤ'})[value]||'';}
+function receiptFindPurchaseDate(raw){
+ const text=String(raw||'').replace(/[０-９]/g,c=>String(c.charCodeAt(0)-65296));
+ const candidates=[...text.matchAll(/(?:^|[^0-9])((?:20)\d{2})\s*(?:年|[\/.-])\s*(0?[1-9]|1[0-2])\s*(?:月|[\/.-])\s*(0?[1-9]|[12]\d|3[01])\s*日?/g)];
+ for(const match of candidates){const y=Number(match[1]),m=Number(match[2]),d=Number(match[3]);const dt=new Date(y,m-1,d);if(dt.getFullYear()===y&&dt.getMonth()===m-1&&dt.getDate()===d)return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;}
+ return '';
+}
+function receiptUpdatePurchaseMeta(raw,store,forceStore){
+ const dateEl=document.getElementById('receiptPurchaseDate'),storeEl=document.getElementById('receiptPurchaseStore'),note=document.getElementById('receiptPurchaseMetaNote');
+ if(!dateEl||!storeEl)return;
+ const date=receiptFindPurchaseDate(raw);
+ dateEl.value=date;
+ const label=receiptStoreLabel(store);
+ if(label && (forceStore||!storeEl.value||storeEl.dataset.autoValue===storeEl.value)){storeEl.value=label;storeEl.dataset.autoValue=label;}
+ else if(!label && !storeEl.value)storeEl.dataset.autoValue='';
+ if(note)note.textContent=date?'✅ 購入日を検出したよ。店名と合わせて確認してね。':'⚠️ 購入日を特定できなかったよ。支出に反映する前に入力してね。';
+}
 function parseReceiptText(){
  const raw=document.getElementById('ocrRaw').value;
  const lines=raw.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
@@ -977,6 +994,7 @@ function parseReceiptText(){
   receiptDetectedDiscount=detectReceiptDiscount(lines);
   document.getElementById('receiptDiscountInput').value=receiptDetectedDiscount;
   document.getElementById('receiptStoreSelect').value=receiptStoreHint;
+  receiptUpdatePurchaseMeta(raw,receiptStoreHint,false);
  receiptDetectedTax=detected.tax;
  const totalInput=document.getElementById('receiptExpectedTotal');
  if(receiptStoreHint==='taiyo'&&receiptTotalEstimated){totalInput.value='';receiptAutoTotal=false;receiptTotalEstimated=false;}
@@ -1104,6 +1122,7 @@ function parseReceiptText(){
 }
 function changeReceiptStore(value){
  receiptStoreManuallyChosen=true;receiptStoreHint=value;showReceiptStoreDiagnosis('✍️ 手動で選んだ店舗を優先しているよ');
+ receiptUpdatePurchaseMeta(document.getElementById('ocrRaw').value,value,true);
  const raw=document.getElementById('ocrRaw').value;
  if(!raw.trim())return;
  // 店舗の選び直し後は既存の候補を消さず、再解析して商品名を取り直す。
@@ -1337,6 +1356,12 @@ function applyReceiptToExpense(){
   alert('レシートの税込支払総額と商品合計が一致するまで反映できないよ。商品名・金額・税・値引きを確認してね。');return;
  }
  const grouped=receiptCategoryTotals();
+ const purchaseDate=document.getElementById('receiptPurchaseDate').value;
+ const purchaseStore=document.getElementById('receiptPurchaseStore').value.trim();
+ if(!purchaseDate){alert('レシートの購入日が読み取れなかったよ。上の「購入日」を入力してから反映してね。');document.getElementById('receiptPurchaseDate').focus();return;}
+ if(!purchaseStore){alert('レシートの店名を確認して入力してね。');document.getElementById('receiptPurchaseStore').focus();return;}
+ document.getElementById('fDate').value=purchaseDate;
+ document.getElementById('fStore').value=purchaseStore;
  document.getElementById('fAmount').value=amount;
  document.getElementById('splitToggle').checked=true;
  splitRows=grouped;toggleSplit();
