@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>すもも家計簿 Ver.10.48（日付・店名連動）</title>
+<title>すもも家計簿 Ver.10.49（商品カテゴリ学習）</title>
 <style>
 :root{--pink:#e88ca8;--pink2:#f7dce5;--ink:#3d3438;--muted:#8b7d83;--bg:#fff8fa;--card:#fff;--line:#eadde2;--green:#79b89a;--blue:#8caed8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
@@ -27,7 +27,7 @@ h2{font-size:18px;margin:4px 0 12px} h3{font-size:15px;margin:4px 0 10px}
 </head>
 <body>
 <div class="app">
-  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.48（日付・店名連動） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
+  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.49（商品カテゴリ学習） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
   <nav>
     <button class="tab active" data-page="home">ホーム</button>
     <button class="tab" data-page="add">支出を追加</button>
@@ -229,7 +229,7 @@ const baseCats=[
   {name:'食費',budget:50000},{name:'日用品',budget:15000},{name:'固定費',budget:0},{name:'子ども費',budget:10000},{name:'ペット費',budget:0},{name:'車関連費',budget:0},{name:'ファッション・美容費',budget:0},{name:'特別費',budget:0},{name:'その他',budget:10000},{name:'酒代',budget:0}
 ];
 const defaultMethods=[{name:'楽天カード',type:'credit'},{name:'Oliveデビット',type:'debit'},{name:'楽天ペイ',type:'qr'},{name:'PayPay',type:'qr'},{name:'現金',type:'cash'}];
-const defaultData={income:0,saving:20000,categories:baseCats,expenses:[],paymentMethods:defaultMethods,carLoan:{enabled:false,normal:20500,bonus:70500,day:26}};
+const defaultData={income:0,saving:20000,categories:baseCats,expenses:[],paymentMethods:defaultMethods,carLoan:{enabled:false,normal:20500,bonus:70500,day:26},receiptCategoryRules:{}};
 let data=load();
 let savingsVisible=false;
 let theme=localStorage.getItem('sumomo_theme')||'pink';
@@ -241,6 +241,8 @@ function normalizeData(d){
  result.paymentMethods=Array.isArray(result.paymentMethods)?result.paymentMethods:defaultMethods.map(x=>({...x}));
  result.paymentMethods=result.paymentMethods.filter(x=>x&&typeof x.name==='string'&&x.name.trim()).map(x=>({name:x.name.trim(),type:x.type||'other'}));
  result.expenses=Array.isArray(result.expenses)?result.expenses:[];
+  result.receiptCategoryRules=result.receiptCategoryRules&&typeof result.receiptCategoryRules==='object'&&!Array.isArray(result.receiptCategoryRules)?result.receiptCategoryRules:{};
+  try{const old=JSON.parse(localStorage.getItem('sumomo_receipt_category_rules')||'{}');for(const [k,v] of Object.entries(old))if(typeof v==='string'&&!result.receiptCategoryRules[k])result.receiptCategoryRules[k]=v;}catch(e){}
  result.categories=Array.isArray(result.categories)?result.categories:baseCats.map(x=>({...x}));
  // 以前のデータ・予算は維持し、新カテゴリだけ追加する。
  for(const c of baseCats)if(!result.categories.some(x=>x.name===c.name))result.categories.push({...c});
@@ -372,6 +374,7 @@ function togglePaymentDetail(){
 }
 
 let splitRows=[];
+let pendingReceiptLearning=null;
 function toggleSplit(){
  const enabled=document.getElementById('splitToggle').checked;
  document.getElementById('splitPanel').style.display=enabled?'block':'none';
@@ -411,7 +414,7 @@ function saveExpense(){
  }
  persist(); clearForm(); showPage('home');
 }
-function editExpense(id){
+function editExpense(id){pendingReceiptLearning=null;
  const e=data.expenses.find(x=>x.id===id);
  if(!e)return;
  editingId=id;
@@ -428,7 +431,7 @@ function editExpense(id){
  document.getElementById('expenseSaveBtn').textContent='更新する';
  showPage('add');
 }
-function clearForm(){editingId=null;splitRows=[];document.getElementById('splitToggle').checked=false;toggleSplit();document.getElementById('fDate').value=new Date().toISOString().slice(0,10);document.getElementById('fAmount').value='';document.getElementById('fStore').value='';document.getElementById('fPaymentDetail').value='';document.getElementById('fNote').value='';document.getElementById('fWho').value='';renderExpenseSubcategories('');document.getElementById('expenseSaveBtn').textContent='登録する';togglePaymentDetail()}
+function clearForm(){pendingReceiptLearning=null;editingId=null;splitRows=[];document.getElementById('splitToggle').checked=false;toggleSplit();document.getElementById('fDate').value=new Date().toISOString().slice(0,10);document.getElementById('fAmount').value='';document.getElementById('fStore').value='';document.getElementById('fPaymentDetail').value='';document.getElementById('fNote').value='';document.getElementById('fWho').value='';renderExpenseSubcategories('');document.getElementById('expenseSaveBtn').textContent='登録する';togglePaymentDetail()}
 function saveBudget(){data.income=Number(document.getElementById('income').value)||0;data.saving=Number(document.getElementById('saving').value)||0;persist();alert('保存したよ！')}
 function editCategoryBudget(encodedName){
  const name=decodeURIComponent(encodedName);
@@ -499,7 +502,7 @@ let receiptExcluded=[];
 let receiptUnmatched=[];
 let receiptObjectURL=null;
 function receiptStatus(message){document.getElementById('ocrStatus').textContent=message}
-function previewReceipt(){
+function previewReceipt(){pendingReceiptLearning=null;
  receiptDetectedTax=0;receiptDetectedDiscount=0;document.getElementById('receiptDiscountInput').value='0';receiptStoreHint='';receiptStoreManuallyChosen=false;document.getElementById('receiptStoreSelect').value='';document.getElementById('receiptStoreDiagnosis').textContent='';receiptAutoTotal=false;receiptTotalEstimated=false;document.getElementById('receiptExpectedTotal').value='';const purchaseDate=document.getElementById('receiptPurchaseDate');if(purchaseDate)purchaseDate.value='';const purchaseStore=document.getElementById('receiptPurchaseStore');if(purchaseStore){purchaseStore.value='';purchaseStore.dataset.autoValue='';}
  const file=document.getElementById('receiptImage').files[0];
  const img=document.getElementById('receiptPreview');
@@ -538,20 +541,30 @@ function receiptCleanProductName(name){
  // OCRが末尾に混ぜた英字ノイズのみ削除。品番やブランドの英字は消さない。
  return t.replace(/\s+[ー−-]\s*[A-Z]{4,8}\s*$/,'').replace(/\s{2,}/g,' ').trim();
 }
+function receiptLearningKey(name){
+ let key=receiptCleanProductName(name).normalize('NFKC').toLowerCase().replace(/[\s　・･_－ー―ｰ-]/g,'').replace(/[()（）【】［］]/g,'');
+ return key.replace(/綾鷹|アヤタカ|アャタカ/g,'あやたか');
+}
+function receiptRememberedCategory(name){
+ const rules=data.receiptCategoryRules||{};
+ const value=rules[receiptLearningKey(name)]||rules[receiptCleanProductName(name).toLowerCase()];
+ return value&&cats().some(c=>c.name===value)?value:'';
+}
 function receiptLearnCategory(name,category){
- const key=receiptCleanProductName(name).toLowerCase();
- if(!key||!cats().some(c=>c.name===category))return;
- try{const learned=JSON.parse(localStorage.getItem('sumomo_receipt_category_rules')||'{}');learned[key]=category;localStorage.setItem('sumomo_receipt_category_rules',JSON.stringify(learned));}catch(e){console.warn('カテゴリ学習の保存に失敗',e)}
+ const key=receiptLearningKey(name);
+ if(key.length<3||!cats().some(c=>c.name===category))return;
+ data.receiptCategoryRules=data.receiptCategoryRules||{};
+ data.receiptCategoryRules[key]=category;
 }
 function guessedCategory(name){
- const learned=JSON.parse(localStorage.getItem('sumomo_receipt_category_rules')||'{}');
- const normalized=receiptCleanProductName(name).toLowerCase();
- if(learned[normalized]&&cats().some(c=>c.name===learned[normalized]))return learned[normalized];
+ const remembered=receiptRememberedCategory(name);
+ if(remembered)return remembered;
  if(/おむつ|オムツ|おしりふき|おもちゃ|玩具|ベビーフード|離乳食|哺乳瓶/.test(name))return cats().some(c=>c.name==='子ども費')?'子ども費':'その他';
  if(/ソフトライド|ランニングシューズ|ウォーキングシューズ|スポーツシューズ|運動靴|シューズ|スニーカー|靴|子供服|子ども服|ベビー服|キッズ.*(?:服|靴)|ロンパース|スタイ|肌着|トレーナー|ズボン|パンツ|Tシャツ|Ｔシャツ|ソックス|靴下|帽子|コスメ|化粧|美容液|ファンデ|リップ|ネイル/.test(name)){const clothing=cats().find(c=>/^(?:ファッション・美容費|衣服|衣類|被服|服飾|衣服・靴|ファッション)$/.test(c.name));return clothing?clothing.name:'その他';}
  if(/キャットフード|猫砂|ちゅーる|ペットシーツ/.test(name))return 'ペット費';
  if(/ガソリン|軽油|給油/.test(name))return '車関連費';
- if(/洗剤|洗濯|柔軟|ティッシュ|トイレット|ラップ|スポンジ|シャンプー|石鹸|歯磨|ゴミ袋|キッチンペーパー/.test(name))return cats().some(c=>c.name==='日用品')?'日用品':'その他';
+ if(/洗剤|洗濯|柔軟|ティッシュ|トイレット|ラップ|スポンジ|シャンプー|石鹸|歯磨|ゴミ袋|キッチンペーパー|ボディタオル|鏡のみがき|マグネット/.test(name))return cats().some(c=>c.name==='日用品')?'日用品':'その他';
+ if(/牛乳|ミルク|パン|レタス|玉ねぎ|トマト|キャベツ|鶏肉|豚肉|牛肉|たまご|卵|ヨーグルト|お茶|ジュース|綾鷹|アヤタカ|米|豆腐|納豆|菓子|カレー/.test(name))return '食費';
  return cats().some(c=>c.name==='その他')?'その他':'食費';
 }
 let receiptDetectedTax=0;
@@ -679,13 +692,13 @@ function parseSeparatedPriceReceipt(lines,expected,isKidsStore){
    previousUnitIndex=i;
    const nearby=lines.slice(Math.max(0,i-4),i+1);
    receiptNameDiagnostics.push({price:q.amount,chosen:name,nearby});
-   parsed.push({name,amount:q.amount,candidates,category:isKidsStore&&cats().some(c=>c.name==='子ども費')?'子ども費':guessedCategory(name)});
+   parsed.push({name,amount:q.amount,candidates,category:receiptDefaultCategory(name,isKidsStore?'nishimatsuya':receiptStoreHint)});
    pending='';continue;
   }
   const amount=money(line);
   if(amount&&/\d{2,6}/.test(line)&&!/(?:^単|個\s*[¥￥])/.test(line)){
    const name=receiptCleanProductName(line.replace(/[¥￥]\s*[\d,，]+.*$/,''))||receiptCleanProductName(pending);
-   if(name&&/[\p{L}]/u.test(name)&&amount<50000){parsed.push({name,amount,category:isKidsStore&&cats().some(c=>c.name==='子ども費')?'子ども費':guessedCategory(name)});pending='';continue}
+   if(name&&/[\p{L}]/u.test(name)&&amount<50000){parsed.push({name,amount,category:receiptDefaultCategory(name,isKidsStore?'nishimatsuya':receiptStoreHint)});pending='';continue}
   }
   // Product descriptions can be wrapped across several OCR lines.
   if(active && /[\p{Script=Han}\p{Script=Katakana}\p{Script=Hiragana}]/u.test(line) && !/^\s*(?:\d{8,}|[¥￥])/.test(line)){
@@ -749,6 +762,7 @@ function detectReceiptAmounts(lines){
  return {total,tax};
 }
 function receiptDefaultCategory(name,storeHint){
+ const remembered=receiptRememberedCategory(name);if(remembered)return remembered;
  if((storeHint==='birthday'||storeHint==='nishimatsuya')&&cats().some(c=>c.name==='子ども費'))return '子ども費';
  return guessedCategory(name);
 }
@@ -1139,7 +1153,7 @@ function restoreExcludedReceiptItem(i){
  const item=receiptExcluded.splice(i,1)[0];if(!item)return;
  const raw=document.getElementById('ocrRaw').value;
  const kids=/西松屋|バースデイ|birthday|しまむら/i.test(raw);
- const category=kids&&cats().some(c=>c.name==='子ども費')?'子ども費':guessedCategory(item.name);
+ const category=receiptDefaultCategory(item.name,kids?'nishimatsuya':receiptStoreHint);
  receiptItems.push({name:item.name,amount:item.amount,category});
  renderReceiptItems();
 }
@@ -1269,7 +1283,7 @@ document.getElementById('receiptBulkScope').addEventListener('change',renderRece
 function renderReceiptItems(){
  renderReceiptBulkControls();
  const el=document.getElementById('ocrItems');
- el.innerHTML=receiptItems.length?receiptItems.map((r,i)=>`<div class="card" style="margin:0;padding:10px;background:var(--bg)"><div class="formgrid" style="gap:7px"><div><label>商品名</label><input value="${esc(r.name)}" oninput="receiptItems[${i}].name=this.value">${r.photoReview?`<small style="color:#a34c72">📷 写真照合の候補・金額を確認してね</small>`:``}${Array.isArray(r.candidates)&&r.candidates.length?`<details style="margin-top:7px"><summary style="cursor:pointer;font-size:13px;color:#a34c72;font-weight:700">🔍 候補から選ぶ（${r.candidates.length}件）</summary><div class="list" style="margin-top:8px">${r.candidates.map((name,k)=>`<button type="button" class="btn secondary" style="text-align:left;white-space:normal;overflow-wrap:anywhere;font-weight:500" onclick="selectReceiptCandidate(${i},${k})">${esc(name)}</button>`).join('')}</div><small class="muted">文字化けがあれば上の商品名欄で直せるよ</small></details>`:''}</div><div><label>${receiptStoreHint==='nishimuta'?'レシート記載の税抜金額（円）':'商品金額（円・レシート表記）'}</label><input type="number" min="0" step="1" inputmode="numeric" value="${esc(r.amount)}" oninput="receiptItems[${i}].amount=Number(this.value);updateReceiptTotal()"></div><div><label>カテゴリ</label><select onchange="receiptItems[${i}].category=this.value;receiptLearnCategory(receiptItems[${i}].name,this.value)">${cats().map(c=>`<option value="${esc(c.name)}" ${r.category===c.name?'selected':''}>${esc(c.name)}</option>`).join('')}</select></div><div style="display:flex;align-items:end"><button class="btn secondary" style="width:100%" onclick="receiptItems.splice(${i},1);renderReceiptItems()">削除</button></div></div></div>`).join(''):'<div class="empty">商品がまだないよ。追加してね 🌷</div>';
+ el.innerHTML=receiptItems.length?receiptItems.map((r,i)=>`<div class="card" style="margin:0;padding:10px;background:var(--bg)"><div class="formgrid" style="gap:7px"><div><label>商品名</label><input value="${esc(r.name)}" oninput="receiptItems[${i}].name=this.value">${receiptRememberedCategory(r.name)?`<small style="color:#39805a">🧠 前回の分類を反映</small>`:''}${r.photoReview?`<small style="color:#a34c72">📷 写真照合の候補・金額を確認してね</small>`:``}${Array.isArray(r.candidates)&&r.candidates.length?`<details style="margin-top:7px"><summary style="cursor:pointer;font-size:13px;color:#a34c72;font-weight:700">🔍 候補から選ぶ（${r.candidates.length}件）</summary><div class="list" style="margin-top:8px">${r.candidates.map((name,k)=>`<button type="button" class="btn secondary" style="text-align:left;white-space:normal;overflow-wrap:anywhere;font-weight:500" onclick="selectReceiptCandidate(${i},${k})">${esc(name)}</button>`).join('')}</div><small class="muted">文字化けがあれば上の商品名欄で直せるよ</small></details>`:''}</div><div><label>${receiptStoreHint==='nishimuta'?'レシート記載の税抜金額（円）':'商品金額（円・レシート表記）'}</label><input type="number" min="0" step="1" inputmode="numeric" value="${esc(r.amount)}" oninput="receiptItems[${i}].amount=Number(this.value);updateReceiptTotal()"></div><div><label>カテゴリ</label><select onchange="receiptItems[${i}].category=this.value">${cats().map(c=>`<option value="${esc(c.name)}" ${r.category===c.name?'selected':''}>${esc(c.name)}</option>`).join('')}</select></div><div style="display:flex;align-items:end"><button class="btn secondary" style="width:100%" onclick="receiptItems.splice(${i},1);renderReceiptItems()">削除</button></div></div></div>`).join(''):'<div class="empty">商品がまだないよ。追加してね 🌷</div>';
  addNishimutaPhotoReviewCandidates();
  removeAlreadyListedReceiptCandidates();
  renderReceiptExcluded();
@@ -1365,9 +1379,7 @@ function applyReceiptToExpense(){
  document.getElementById('fAmount').value=amount;
  document.getElementById('splitToggle').checked=true;
  splitRows=grouped;toggleSplit();
- const learned=JSON.parse(localStorage.getItem('sumomo_receipt_category_rules')||'{}');
- for(const r of valid)learned[receiptCleanProductName(r.name).toLowerCase()]=r.category;
- localStorage.setItem('sumomo_receipt_category_rules',JSON.stringify(learned));
+ pendingReceiptLearning=valid.map(r=>({name:r.name,category:r.category}));
  const pay=document.getElementById('fPayment');
  if([...pay.options].some(x=>x.value==='Oliveデビット'))pay.value='Oliveデビット';
  togglePaymentDetail();
@@ -1438,6 +1450,7 @@ function registerTsvPurchase(){
  const splits=smartBreakdown(p);
  if(!splits.length||splits.reduce((s,x)=>s+x.amount,0)!==p.total){alert('カテゴリの金額を確認してね');return}
  if(!confirm(`${p.date} ${p.store}\n${yen(p.total)} を家計簿に登録する？\n\n${splits.map(x=>x.category+' '+yen(x.amount)).join('\n')}`))return;
+ for(const line of p.lines)receiptLearnCategory(line.name,line.category);
  data.expenses.push({id:crypto.randomUUID?crypto.randomUUID():String(Date.now()),date:p.date,store:p.store,amount:p.total,category:splits[0].category,splits,payment:document.getElementById('tsvPayment').value,paymentDetail:'',note:'スマートレシートTSVから取り込み（税・値引き按分）',sourceKey});
  persist();showTsvPurchase();renderSmartBatch();tsvStatus('登録できたよ！別の買い物も選んで確認できるよ 🩷');
 }
@@ -1510,6 +1523,7 @@ function registerSmartBatch(){
  for(const p of chosen){
   const sourceKey=purchaseKey(p);if(smartAlreadyRegistered(p))continue;
   const splits=smartBreakdown(p);
+  for(const line of p.lines)receiptLearnCategory(line.name,line.category);
   data.expenses.push({id:crypto.randomUUID?crypto.randomUUID():String(Date.now())+'_'+added,date:p.date,store:p.store,amount:p.total,category:splits[0].category,splits,payment:smartBatchPayments[smartPurchases.indexOf(p)]||document.getElementById('tsvBatchPayment').value,paymentDetail:'',note:'スマートレシートTSVからまとめて取り込み（税・値引き按分）',sourceKey});added++;
  }
  if(added){persist();showTsvPurchase();renderSmartBatch();tsvStatus(`${added}件の買い物を登録できたよ！重複は除外したよ 🩷`)}
