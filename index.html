@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>すもも家計簿 Ver.10.51（予算も別々）</title>
+<title>すもも家計簿 Ver.10.52（固定費テスト）</title>
 <style>
 :root{--pink:#e88ca8;--pink2:#f7dce5;--ink:#3d3438;--muted:#8b7d83;--bg:#fff8fa;--card:#fff;--line:#eadde2;--green:#79b89a;--blue:#8caed8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
@@ -27,7 +27,7 @@ h2{font-size:18px;margin:4px 0 12px} h3{font-size:15px;margin:4px 0 10px}
 </head>
 <body>
 <div class="app">
-  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.51（予算も別々） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
+  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.52（固定費テスト） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
   <div class="card" style="margin:6px 0 12px;padding:12px"><div class="row" style="flex-wrap:wrap"><div><strong>🌷 家計簿モード</strong><div class="muted" style="font-size:12px">テストと本番の支出は別々に集計するよ</div></div><select id="accountMode" style="width:auto;min-width:150px" onchange="changeAccountMode(this.value)"><option value="test">🧪 テスト用</option><option value="live">💰 本番用</option></select></div><small id="modeHelp" class="muted"></small></div>
   <nav>
     <button class="tab active" data-page="home">ホーム</button>
@@ -211,6 +211,24 @@ h2{font-size:18px;margin:4px 0 12px} h3{font-size:15px;margin:4px 0 10px}
       </div>
       <div class="actions"><button class="btn secondary" onclick="saveCarLoan()">車ローン設定を保存</button></div>
       <div id="carLoanSchedule" style="margin-top:12px"></div>
+      <div class="card" style="margin-top:12px;padding:12px">
+        <strong>🧪 固定費の月別テスト・確認登録</strong>
+        <p class="muted" style="font-size:12px">テスト用なら過去・未来の月も確認できるよ。本番用でも登録できるけれど、実際の引落日と金額を確認してから登録してね。表示だけでは計上されないよ。</p>
+        <label>確認する月</label><input type="month" id="fixedCheckMonth" onchange="renderFixedCheck()">
+        <div id="fixedCheckList"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>📅 その他の毎月の固定費</h2>
+      <p class="muted" style="font-size:12px">奨学金・携帯代・保育料などの予定を登録できるよ。金額が変わるものは月ごとに確認してから計上してね。予定設定は共通、支出の登録はテストと本番で別々だよ。</p>
+      <div class="formgrid">
+        <div><label>固定費名</label><input id="fixedName" maxlength="40" placeholder="例：奨学金"></div>
+        <div><label>毎月の予定額（円）</label><input id="fixedAmount" type="number" min="0" placeholder="例：5000"></div>
+        <div><label>毎月の予定日（1〜28日）</label><input id="fixedDay" type="number" min="1" max="28" value="27"></div>
+        <div><label>カテゴリ</label><select id="fixedCategory"><option value="固定費">固定費</option><option value="子ども費">子ども費</option><option value="ペット費">ペット費</option><option value="車関連費">車関連費</option><option value="酒代">酒代</option><option value="その他">その他</option></select></div>
+      </div>
+      <div class="actions"><button class="btn secondary" onclick="addFixedRule()">＋ 毎月の予定を追加</button></div>
+      <div id="fixedRulesList"></div>
     </div>
     <div class="card">
       <h2>データ</h2>
@@ -230,7 +248,7 @@ const baseCats=[
   {name:'食費',budget:50000},{name:'日用品',budget:15000},{name:'固定費',budget:0},{name:'子ども費',budget:10000},{name:'ペット費',budget:0},{name:'車関連費',budget:0},{name:'ファッション・美容費',budget:0},{name:'特別費',budget:0},{name:'その他',budget:10000},{name:'酒代',budget:0}
 ];
 const defaultMethods=[{name:'楽天カード',type:'credit'},{name:'Oliveデビット',type:'debit'},{name:'楽天ペイ',type:'qr'},{name:'PayPay',type:'qr'},{name:'現金',type:'cash'}];
-const defaultData={income:0,saving:20000,categories:baseCats,expenses:[],paymentMethods:defaultMethods,carLoan:{enabled:false,normal:20500,bonus:70500,day:26},receiptCategoryRules:{},accountMode:"test",modeMigrationDone:false,budgetModeMigrationDone:false,modeBudgets:null};
+const defaultData={income:0,saving:20000,categories:baseCats,expenses:[],paymentMethods:defaultMethods,carLoan:{enabled:false,normal:20500,bonus:70500,day:26},receiptCategoryRules:{},accountMode:"test",modeMigrationDone:false,budgetModeMigrationDone:false,modeBudgets:null,fixedRules:[]};
 let data=load();
 let savingsVisible=false;
 let theme=localStorage.getItem('sumomo_theme')||'pink';
@@ -239,6 +257,7 @@ let editingId=null;
 function normalizeData(d){
  const result={...defaultData,...d};
  result.carLoan={...defaultData.carLoan,...(result.carLoan||{})};
+ result.fixedRules=Array.isArray(result.fixedRules)?result.fixedRules.filter(r=>r&&typeof r.name==='string'):[];
  result.paymentMethods=Array.isArray(result.paymentMethods)?result.paymentMethods:defaultMethods.map(x=>({...x}));
  result.paymentMethods=result.paymentMethods.filter(x=>x&&typeof x.name==='string'&&x.name.trim()).map(x=>({name:x.name.trim(),type:x.type||'other'}));
  result.expenses=Array.isArray(result.expenses)?result.expenses:[];
@@ -326,7 +345,7 @@ function render(){
   const recent=[...modeExpenses()].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,8);
   document.getElementById('recent').innerHTML=recent.length?recent.map(e=>`<div class="item"><div><strong>${esc(e.store||'支出')}</strong><span class="cat">${Array.isArray(e.splits)&&e.splits.length?'カテゴリ分け':esc(e.category)}</span><br><small>${esc(e.date)} · ${esc(e.payment||'')}${e.subcategory?' · '+esc(e.subcategory):''}${e.who?' · '+esc(e.who):''}${e.paymentDetail?'（'+esc(e.paymentDetail)+'）':''}</small>${Array.isArray(e.splits)&&e.splits.length?'<br><small>'+e.splits.map(x=>esc(x.category)+' '+yen(x.amount)).join(' / ')+'</small>':''}</div><div style="display:flex;align-items:center;gap:10px"><div class="amount">${yen(e.amount)}</div><button class="btn secondary" style="padding:7px 10px;font-size:12px" onclick="editExpense('${e.id}')">編集</button><button class="btn danger" style="padding:7px 10px;font-size:12px" onclick="removeExpense('${e.id}')">削除</button></div></div>`).join(''):'<div class="empty">まだ支出がありません</div>';
   document.getElementById('income').value=modeBudget().income||0; document.getElementById('saving').value=modeBudget().saving||0;
-  renderCats(); renderPaymentMethods(); renderBudget(); renderPie(); renderSplitRows(); renderCarLoan();
+  renderCats(); renderPaymentMethods(); renderBudget(); renderPie(); renderSplitRows(); renderCarLoan(); renderFixedRules(); renderFixedCheck();
 }
 const subcategoryOptions={
  '食費':['食材','飲料','外食'], '日用品':['洗剤・消耗品','生活用品'],
@@ -521,6 +540,64 @@ function registerCarLoan(year,month){
  }
  if(!confirm(`${actual} に車ローン ${yen(amount)} が引き落とされたことを確認した？\n確認できた場合だけ登録してね。`))return;
  data.expenses.push({accountMode:currentMode(),id:crypto.randomUUID?crypto.randomUUID():String(Date.now()),sourceKey:key,date:actual,amount,store:'車ローン',category:'車関連費',subcategory:'ローン',who:'家族共用',payment:'口座引落',paymentDetail:'',note:`固定費／${month===6||month===12?'ボーナス月':'通常月'}・車ローン`});persist();
+}
+function fixedMonth(){
+ const el=document.getElementById('fixedCheckMonth');
+ if(!el.value){const n=new Date();el.value=`${n.getFullYear()}-${pad(n.getMonth()+1)}`;}
+ return el.value;
+}
+function fixedPlannedDate(year,month,day){
+ const d=new Date(year,month-1,Math.min(28,Math.max(1,Number(day)||27)));
+ while(d.getDay()===0||d.getDay()===6)d.setDate(d.getDate()+1);
+ return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
+function fixedEntries(year,month){
+ const entries=[];
+ if(data.carLoan&&data.carLoan.enabled){entries.push({key:`carloan:${year}-${pad(month)}`,name:'車ローン',amount:carLoanAmount(month),date:carLoanDate(year,month),category:'車関連費',car:true});}
+ for(const r of data.fixedRules){entries.push({key:`fixed:${r.id}:${year}-${pad(month)}`,name:r.name,amount:Number(r.amount)||0,date:fixedPlannedDate(year,month,r.day),category:r.category||'固定費',car:false});}
+ return entries;
+}
+function renderFixedCheck(){
+ const el=document.getElementById('fixedCheckList');if(!el)return;
+ const [y,m]=fixedMonth().split('-').map(Number);
+ const entries=fixedEntries(y,m);
+ el.innerHTML=entries.length?entries.map(e=>{
+ const exists=modeExpenses().some(x=>x.sourceKey===e.key);
+ return `<div class="item"><div><strong>${esc(e.name)} ${yen(e.amount)}</strong><br><small>${e.date} 予定（土日繰延・祝日未調整）</small></div><button class="btn secondary" ${exists?'disabled':''} onclick="registerFixedEntry('${e.key}')">${exists?'登録済み':'確認して登録'}</button></div>`;
+ }).join(''):'<p class="muted">予定はまだないよ。車ローン設定を保存するか、その他の固定費を追加してね。</p>';
+}
+function addFixedRule(){
+ const name=document.getElementById('fixedName').value.trim(),amount=Number(document.getElementById('fixedAmount').value),day=Number(document.getElementById('fixedDay').value),category=document.getElementById('fixedCategory').value;
+ if(!name||!Number.isSafeInteger(amount)||amount<0||!Number.isInteger(day)||day<1||day>28){alert('名前・金額・日付を確認してね');return;}
+ const id='r'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+ data.fixedRules.push({id,name,amount,day,category});
+ document.getElementById('fixedName').value='';document.getElementById('fixedAmount').value='';persist();
+}
+function removeFixedRule(id){
+ if(!confirm('この固定費の予定を削除する？ すでに登録した支出は残るよ。'))return;
+ data.fixedRules=data.fixedRules.filter(r=>r.id!==id);persist();
+}
+function renderFixedRules(){
+ const el=document.getElementById('fixedRulesList');if(!el)return;
+ el.innerHTML=data.fixedRules.length?data.fixedRules.map(r=>`<div class="item"><div><strong>${esc(r.name)}</strong><br><small>毎月${Number(r.day)}日頃・${yen(r.amount)}・${esc(r.category)}</small></div><button class="btn danger" onclick="removeFixedRule('${r.id}')">予定を削除</button></div>`).join(''):'<p class="muted">追加した固定費はここに表示されるよ。</p>';
+}
+function registerFixedEntry(key){
+ const [year,month]=fixedMonth().split('-').map(Number);
+ const entry=fixedEntries(year,month).find(e=>e.key===key);
+ if(!entry)return;
+ if(modeExpenses().some(e=>e.sourceKey===key)){alert('このモードでは登録済みだよ');return;}
+ const actual=prompt('登録する日付を確認・修正してね（YYYY-MM-DD）',entry.date);
+ if(actual===null)return;
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(actual)||Number.isNaN(dateObj(actual).getTime())||dateObj(actual).toISOString().slice(0,10)!==actual){alert('正しい日付をYYYY-MM-DDで入力してね');return;}
+ const raw=prompt('実際に登録する金額を確認・修正してね（円）',String(entry.amount));
+ if(raw===null)return;
+ const amount=Number(raw);
+ if(!Number.isSafeInteger(amount)||amount<0){alert('金額は0以上の整数で入力してね');return;}
+ const similar=modeExpenses().filter(e=>e.date===actual&&Number(e.amount)===amount&&(e.store||'')===entry.name);
+ if(similar.length&&!confirm('同じ日付・名前・金額の支出があるよ。二重登録でないことを確認した場合だけOKを押してね。'))return;
+ const mode=currentMode()==='test'?'テスト':'本番';
+ if(!confirm(`【${mode}用】${actual} ${entry.name} ${yen(amount)} を登録する？\n※実際の引き落としを自動確認する機能ではないよ。`))return;
+ data.expenses.push({accountMode:currentMode(),id:crypto.randomUUID?crypto.randomUUID():String(Date.now()),sourceKey:key,date:actual,amount,store:entry.name,category:entry.category,payment:'口座引落',note:`毎月の固定費（${year}年${month}月分・確認登録）`});persist();
 }
 function exportData(){const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='sumomo-kakeibo-backup.json';a.click();URL.revokeObjectURL(a.href)}
 document.getElementById('importFile').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const imported=JSON.parse(r.result);if(!imported||typeof imported!=='object'||!Array.isArray(imported.expenses)){throw Error('invalid backup')}data=normalizeData(imported);persist();alert('読み込んだよ！')}catch{alert('読み込みに失敗しました')}};r.readAsText(f)});
