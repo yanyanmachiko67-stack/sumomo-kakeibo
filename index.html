@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>すもも家計簿 Ver.10.50（テスト・本番分離）</title>
+<title>すもも家計簿 Ver.10.51（予算も別々）</title>
 <style>
 :root{--pink:#e88ca8;--pink2:#f7dce5;--ink:#3d3438;--muted:#8b7d83;--bg:#fff8fa;--card:#fff;--line:#eadde2;--green:#79b89a;--blue:#8caed8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
@@ -27,7 +27,7 @@ h2{font-size:18px;margin:4px 0 12px} h3{font-size:15px;margin:4px 0 10px}
 </head>
 <body>
 <div class="app">
-  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.50（テスト・本番分離） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
+  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.51（予算も別々） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
   <div class="card" style="margin:6px 0 12px;padding:12px"><div class="row" style="flex-wrap:wrap"><div><strong>🌷 家計簿モード</strong><div class="muted" style="font-size:12px">テストと本番の支出は別々に集計するよ</div></div><select id="accountMode" style="width:auto;min-width:150px" onchange="changeAccountMode(this.value)"><option value="test">🧪 テスト用</option><option value="live">💰 本番用</option></select></div><small id="modeHelp" class="muted"></small></div>
   <nav>
     <button class="tab active" data-page="home">ホーム</button>
@@ -157,7 +157,7 @@ h2{font-size:18px;margin:4px 0 12px} h3{font-size:15px;margin:4px 0 10px}
 
   <section id="budget" class="page">
     <div class="card">
-      <h2>今月の予算・貯金</h2>
+      <h2>今月の予算・貯金</h2><p class="muted" style="font-size:12px">🧪 テスト用と 💰 本番用で収入・貯金・カテゴリ予算は別々に保存されるよ。上の家計簿モードを切り替えて設定してね。</p>
       <div class="formgrid">
         <div><label>今月の収入</label><input id="income" type="number" min="0"></div>
         <div><label>今月の貯金</label><input id="saving" type="number" min="0"></div>
@@ -230,7 +230,7 @@ const baseCats=[
   {name:'食費',budget:50000},{name:'日用品',budget:15000},{name:'固定費',budget:0},{name:'子ども費',budget:10000},{name:'ペット費',budget:0},{name:'車関連費',budget:0},{name:'ファッション・美容費',budget:0},{name:'特別費',budget:0},{name:'その他',budget:10000},{name:'酒代',budget:0}
 ];
 const defaultMethods=[{name:'楽天カード',type:'credit'},{name:'Oliveデビット',type:'debit'},{name:'楽天ペイ',type:'qr'},{name:'PayPay',type:'qr'},{name:'現金',type:'cash'}];
-const defaultData={income:0,saving:20000,categories:baseCats,expenses:[],paymentMethods:defaultMethods,carLoan:{enabled:false,normal:20500,bonus:70500,day:26},receiptCategoryRules:{},accountMode:"test",modeMigrationDone:false};
+const defaultData={income:0,saving:20000,categories:baseCats,expenses:[],paymentMethods:defaultMethods,carLoan:{enabled:false,normal:20500,bonus:70500,day:26},receiptCategoryRules:{},accountMode:"test",modeMigrationDone:false,budgetModeMigrationDone:false,modeBudgets:null};
 let data=load();
 let savingsVisible=false;
 let theme=localStorage.getItem('sumomo_theme')||'pink';
@@ -249,6 +249,15 @@ function normalizeData(d){
   result.receiptCategoryRules=result.receiptCategoryRules&&typeof result.receiptCategoryRules==='object'&&!Array.isArray(result.receiptCategoryRules)?result.receiptCategoryRules:{};
   try{const old=JSON.parse(localStorage.getItem('sumomo_receipt_category_rules')||'{}');for(const [k,v] of Object.entries(old))if(typeof v==='string'&&!result.receiptCategoryRules[k])result.receiptCategoryRules[k]=v;}catch(e){}
  result.categories=Array.isArray(result.categories)?result.categories:baseCats.map(x=>({...x}));
+ // 旧設定をテスト用に保持し、本番用は独立した初期設定にする。
+ if(!result.budgetModeMigrationDone||!result.modeBudgets){
+   result.modeBudgets={test:{income:Number(result.income)||0,saving:Number(result.saving)||0,categoryBudgets:Object.fromEntries(result.categories.map(c=>[c.name,Number(c.budget)||0]))},live:{income:0,saving:0,categoryBudgets:Object.fromEntries(baseCats.map(c=>[c.name,Number(c.budget)||0]))}};
+   result.budgetModeMigrationDone=true;
+ }
+ for(const mode of ['test','live']){
+   const b=result.modeBudgets[mode]||{};
+   result.modeBudgets[mode]={income:Number(b.income)||0,saving:Number(b.saving)||0,categoryBudgets:b.categoryBudgets&&typeof b.categoryBudgets==='object'?b.categoryBudgets:{}};
+ }
  // 以前のデータ・予算は維持し、新カテゴリだけ追加する。
  for(const c of baseCats)if(!result.categories.some(x=>x.name===c.name))result.categories.push({...c});
  return result;
@@ -267,7 +276,8 @@ function periodStartEnd(base=new Date()){
 }
 function inPeriod(date){const {start,end}=periodStartEnd(); const d=dateObj(date); return d>=start&&d<end}
 function periodLabel(){const {start,end}=periodStartEnd(); return `${start.getFullYear()}/${pad(start.getMonth()+1)}/${pad(start.getDate())} 〜 ${end.getFullYear()}/${pad(end.getMonth()+1)}/${pad(end.getDate())}`}
-function cats(){return data.categories}
+function cats(){return data.categories.map(c=>({...c,budget:modeBudget().categoryBudgets[c.name]??c.budget??0}))}
+function modeBudget(){return data.modeBudgets[currentMode()]}
 function currentMode(){return data.accountMode==='live'?'live':'test'}
 function modeExpenses(){return data.expenses.filter(e=>(e.accountMode||'test')===currentMode())}
 function changeAccountMode(mode){
@@ -303,11 +313,11 @@ function render(){
  document.getElementById('modeHelp').textContent=currentMode()==='test'?'🧪 テスト記録：本番の家計には加算しないよ。商品カテゴリの学習は共通。':'💰 本番記録：こちらだけが本番の家計集計になるよ。';
   document.getElementById('period').textContent=periodLabel();
   const total=expenseTotal(), food=catTotal('食費'), foodBudget=(cats().find(c=>c.name==='食費')||{budget:0}).budget;
-  const available=(Number(data.income)||0)-total-(Number(data.saving)||0);
+  const available=modeBudget().income-total-modeBudget().saving;
   document.getElementById('available').textContent=yen(available);
   document.getElementById('totalExpense').textContent=yen(total);
-  document.getElementById('savingStat').textContent=yen(data.saving);
-  document.getElementById('savingsBalance').textContent=savingsVisible ? yen(data.saving) : '••••••';
+  document.getElementById('savingStat').textContent=yen(modeBudget().saving);
+  document.getElementById('savingsBalance').textContent=savingsVisible ? yen(modeBudget().saving) : '••••••';
   document.getElementById('toggleSavingsBtn').textContent=savingsVisible ? '🙈 非表示' : '👁 表示';
   document.getElementById('foodUse').textContent=yen(food);
   document.getElementById('foodBudget').textContent=yen(foodBudget);
@@ -315,7 +325,7 @@ function render(){
   document.getElementById('foodBar').style.width=Math.min(100,foodBudget?food/foodBudget*100:0)+'%';
   const recent=[...modeExpenses()].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,8);
   document.getElementById('recent').innerHTML=recent.length?recent.map(e=>`<div class="item"><div><strong>${esc(e.store||'支出')}</strong><span class="cat">${Array.isArray(e.splits)&&e.splits.length?'カテゴリ分け':esc(e.category)}</span><br><small>${esc(e.date)} · ${esc(e.payment||'')}${e.subcategory?' · '+esc(e.subcategory):''}${e.who?' · '+esc(e.who):''}${e.paymentDetail?'（'+esc(e.paymentDetail)+'）':''}</small>${Array.isArray(e.splits)&&e.splits.length?'<br><small>'+e.splits.map(x=>esc(x.category)+' '+yen(x.amount)).join(' / ')+'</small>':''}</div><div style="display:flex;align-items:center;gap:10px"><div class="amount">${yen(e.amount)}</div><button class="btn secondary" style="padding:7px 10px;font-size:12px" onclick="editExpense('${e.id}')">編集</button><button class="btn danger" style="padding:7px 10px;font-size:12px" onclick="removeExpense('${e.id}')">削除</button></div></div>`).join(''):'<div class="empty">まだ支出がありません</div>';
-  document.getElementById('income').value=data.income||0; document.getElementById('saving').value=data.saving||0;
+  document.getElementById('income').value=modeBudget().income||0; document.getElementById('saving').value=modeBudget().saving||0;
   renderCats(); renderPaymentMethods(); renderBudget(); renderPie(); renderSplitRows(); renderCarLoan();
 }
 const subcategoryOptions={
@@ -456,19 +466,19 @@ function editExpense(id){pendingReceiptLearning=null;
  showPage('add');
 }
 function clearForm(){pendingReceiptLearning=null;editingId=null;splitRows=[];document.getElementById('splitToggle').checked=false;toggleSplit();document.getElementById('fDate').value=new Date().toISOString().slice(0,10);document.getElementById('fAmount').value='';document.getElementById('fStore').value='';document.getElementById('fPaymentDetail').value='';document.getElementById('fNote').value='';document.getElementById('fWho').value='';renderExpenseSubcategories('');document.getElementById('expenseSaveBtn').textContent='登録する';togglePaymentDetail()}
-function saveBudget(){data.income=Number(document.getElementById('income').value)||0;data.saving=Number(document.getElementById('saving').value)||0;persist();alert('保存したよ！')}
+function saveBudget(){modeBudget().income=Number(document.getElementById('income').value)||0;modeBudget().saving=Number(document.getElementById('saving').value)||0;persist();alert('このモードの予算を保存したよ！')}
 function editCategoryBudget(encodedName){
  const name=decodeURIComponent(encodedName);
- const c=data.categories.find(x=>x.name===name);
+ const c=cats().find(x=>x.name===name);
  if(!c)return;
  const input=prompt(`${name}の月予算を入力してね`, String(c.budget||0));
  if(input===null)return;
  const value=Number(input);
  if(!Number.isFinite(value)||value<0){alert('0以上の数字を入力してね');return}
- c.budget=value;
+ modeBudget().categoryBudgets[name]=value;
  persist();
 }
-function addCategory(){const n=document.getElementById('newCat').value.trim();if(!n)return;data.categories.push({name:n,budget:Number(document.getElementById('newBudget').value)||0});persist();document.getElementById('newCat').value='';document.getElementById('newBudget').value='';alert('カテゴリを追加したよ！')}
+function addCategory(){const n=document.getElementById('newCat').value.trim();if(!n)return;if(data.categories.some(c=>c.name===n)){alert('同じカテゴリがあるよ');return}data.categories.push({name:n,budget:0});modeBudget().categoryBudgets[n]=Number(document.getElementById('newBudget').value)||0;persist();document.getElementById('newCat').value='';document.getElementById('newBudget').value='';alert('カテゴリを追加したよ！')}
 function carLoanDate(year,month){
  const c=data.carLoan,d=new Date(year,month-1,Math.min(28,Math.max(1,Number(c.day)||26)));
  while(d.getDay()===0||d.getDay()===6)d.setDate(d.getDate()+1);
