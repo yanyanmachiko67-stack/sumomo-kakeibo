@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>すもも家計簿 Ver.10.53（楽天モバイル自動計算）</title>
+<title>すもも家計簿 Ver.10.54（口座・保育料・立替金）</title>
 <style>
 :root{--pink:#e88ca8;--pink2:#f7dce5;--ink:#3d3438;--muted:#8b7d83;--bg:#fff8fa;--card:#fff;--line:#eadde2;--green:#79b89a;--blue:#8caed8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
@@ -22,16 +22,17 @@ h2{font-size:18px;margin:4px 0 12px} h3{font-size:15px;margin:4px 0 10px}
 .list{display:grid;gap:8px}#recent{margin-top:16px}.item{display:flex;align-items:center;justify-content:space-between;border:1px solid var(--line);border-radius:14px;padding:12px;background:#fff}.item small{color:var(--muted)}.amount{font-weight:800}.cat{font-size:11px;padding:4px 8px;border-radius:999px;background:var(--pink2);margin-left:7px}
 .budget{display:grid;gap:10px}.budgetrow{border:1px solid var(--line);padding:12px;border-radius:14px}
 .empty{padding:25px;text-align:center;color:var(--muted)}
-@media(max-width:760px){.grid{grid-template-columns:repeat(2,1fr)}.formgrid{grid-template-columns:1fr}.money{font-size:20px}#expensePieWrap{grid-template-columns:1fr!important}.item{min-width:0}}
+@media(max-width:760px){.grid{grid-template-columns:repeat(2,1fr)}.formgrid{grid-template-columns:1fr}.money{font-size:20px}#expensePieWrap{grid-template-columns:1fr!important}.item{min-width:0}#recent .item{flex-wrap:wrap;gap:8px}#recent .item>div:last-child{flex-wrap:wrap}}
 </style>
 </head>
 <body>
 <div class="app">
-  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.53（楽天モバイル自動計算） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
+  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.54（口座・保育料・立替金） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
   <div class="card" style="margin:6px 0 12px;padding:12px"><div class="row" style="flex-wrap:wrap"><div><strong>🌷 家計簿モード</strong><div class="muted" style="font-size:12px">テストと本番の支出は別々に集計するよ</div></div><select id="accountMode" style="width:auto;min-width:150px" onchange="changeAccountMode(this.value)"><option value="test">🧪 テスト用</option><option value="live">💰 本番用</option></select></div><small id="modeHelp" class="muted"></small></div>
   <nav>
     <button class="tab active" data-page="home">ホーム</button>
     <button class="tab" data-page="add">支出を追加</button>
+    <button class="tab" data-page="finance">口座・保育料・立替</button>
     <button class="tab" data-page="budget">予算・貯金</button>
     <button class="tab" data-page="settings">設定・データ</button>
   </nav>
@@ -155,6 +156,35 @@ h2{font-size:18px;margin:4px 0 12px} h3{font-size:15px;margin:4px 0 10px}
     </div>
   </section>
 
+  <section id="finance" class="page">
+    <div class="card"><h2>🏦 口座間移動・残高</h2><p class="muted" style="font-size:12px">銀行の実残高を最初に入力してね。振込は収入・支出に含めないよ。テスト用と本番用は別管理。</p>
+      <div id="bankBalances" class="list"></div>
+      <h3 style="margin-top:18px">銀行間の振込</h3><div class="formgrid">
+        <div><label>振込日</label><input type="date" id="transferDate"></div>
+        <div><label>振込元</label><select id="transferFrom"></select></div>
+        <div><label>振込先</label><select id="transferTo"></select></div>
+        <div><label>振込額（円）</label><input type="number" id="transferAmount" min="1" step="1" placeholder="例：20000"></div>
+        <div><label>振込手数料（円・任意）</label><input type="number" id="transferFee" min="0" step="1" value="0"></div>
+      </div><div class="actions"><button class="btn" onclick="registerTransfer()">振込を登録する</button></div>
+      <p class="muted" style="font-size:12px">手数料は振込元口座から減り、支出の「固定費」に計上するよ。口座残高は登録した取引だけを反映した試算で、銀行との自動連携ではないよ。</p><div id="transferHistory" class="list"></div>
+    </div>
+    <div class="card"><h2>👧👶 保育料・給食費</h2><p class="muted" style="font-size:12px">ハガキごとに別々に登録。楽天銀行の請求書払いを想定。金額が未定なら空欄でOK。登録前に支払日を確認してね。</p>
+      <div class="formgrid"><div><label>対象月</label><input id="childMonth" type="month" onchange="renderFinance()"></div><div><label>子ども</label><select id="childPerson" onchange="renderFinance()"><option value="older">👧 上の子</option><option value="younger">👶 下の子</option></select></div>
+      <div><label>保育料（円）</label><input id="childFee" type="number" min="0" step="1" placeholder="ハガキの金額を入力" oninput="updateChildTotal()"></div>
+      <div><label>給食費（円・未定なら空欄）</label><input id="childLunch" type="number" min="0" step="1" placeholder="未定なら空欄" oninput="updateChildTotal()"></div>
+      <div><label>実際の支払日</label><input id="childPaidDate" type="date"></div><div><label>支払元口座</label><select id="childBank"></select></div></div>
+      <p id="childTotal" style="font-weight:700">合計 ¥0</p><div class="actions"><button class="btn" onclick="registerChildcare()">この子の支払いを登録</button></div><div id="childHistory" class="list"></div>
+    </div>
+    <div class="card"><h2>💳 旦那さんの立替金</h2><p class="muted" style="font-size:12px">家族カードなどで代わりに払った分を管理。返金は通常の収入に含めないよ。カード決済は銀行残高から即時には引かれないので、口座残高とは別管理だよ。</p>
+      <div id="advanceSummary"></div><h3>立替を追加</h3><div class="formgrid"><div><label>立替日</label><input type="date" id="advanceDate"></div><div><label>内容</label><input id="advanceTitle" placeholder="例：旦那さんの買い物"></div><div><label>立替額（円）</label><input type="number" id="advanceAmount" min="1" step="1"></div><div><label>支払い方法</label><select id="advancePayment"><option>楽天カード（家族カード）</option><option>楽天カード（自分用）</option><option>Oliveデビット</option><option>その他</option></select></div></div>
+      <div class="actions"><button class="btn" onclick="registerAdvance()">立替を登録</button></div>
+      <h3 style="margin-top:18px">返金を登録（複数件まとめてOK）</h3><div id="advanceOutstanding" class="list"></div>
+      <div class="formgrid" style="margin-top:12px"><div><label>返金日</label><input type="date" id="refundDate"></div><div><label>振込先口座</label><select id="refundBank"></select></div></div>
+      <p class="muted" style="font-size:12px">各立替の「今回返してもらった額」を入力。合計が実際の振込額と一致するか確認してね。</p><div id="refundSum" style="font-weight:700">今回の返金合計 ¥0</div><div class="actions"><button class="btn" onclick="registerRefund()">返金をまとめて登録</button></div>
+      <div id="advanceHistory" class="list"></div>
+      <p class="muted" style="font-size:12px">携帯代などの月末の定期振込は、入金を確認してから返金登録してね。約13,000円は未確定なので自動計上しないよ。</p>
+    </div>
+  </section>
   <section id="budget" class="page">
     <div class="card">
       <h2>今月の予算・貯金</h2><p class="muted" style="font-size:12px">🧪 テスト用と 💰 本番用で収入・貯金・カテゴリ予算は別々に保存されるよ。上の家計簿モードを切り替えて設定してね。</p>
@@ -262,7 +292,7 @@ const baseCats=[
   {name:'食費',budget:50000},{name:'日用品',budget:15000},{name:'固定費',budget:0},{name:'子ども費',budget:10000},{name:'ペット費',budget:0},{name:'車関連費',budget:0},{name:'ファッション・美容費',budget:0},{name:'特別費',budget:0},{name:'その他',budget:10000},{name:'酒代',budget:0}
 ];
 const defaultMethods=[{name:'楽天カード',type:'credit'},{name:'Oliveデビット',type:'debit'},{name:'楽天ペイ',type:'qr'},{name:'PayPay',type:'qr'},{name:'現金',type:'cash'}];
-const defaultData={income:0,saving:20000,categories:baseCats,expenses:[],paymentMethods:defaultMethods,carLoan:{enabled:false,normal:20500,bonus:70500,day:26},receiptCategoryRules:{},accountMode:"test",modeMigrationDone:false,budgetModeMigrationDone:false,modeBudgets:null,fixedRules:[]};
+const defaultData={income:0,saving:20000,categories:baseCats,expenses:[],paymentMethods:defaultMethods,carLoan:{enabled:false,normal:20500,bonus:70500,day:26},receiptCategoryRules:{},accountMode:"test",modeMigrationDone:false,budgetModeMigrationDone:false,modeBudgets:null,fixedRules:[],financeModes:null};
 let data=load();
 let savingsVisible=false;
 let theme=localStorage.getItem('sumomo_theme')||'pink';
@@ -359,7 +389,7 @@ function render(){
   const recent=[...modeExpenses()].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,8);
   document.getElementById('recent').innerHTML=recent.length?recent.map(e=>`<div class="item"><div><strong>${esc(e.store||'支出')}</strong><span class="cat">${Array.isArray(e.splits)&&e.splits.length?'カテゴリ分け':esc(e.category)}</span><br><small>${esc(e.date)} · ${esc(e.payment||'')}${e.subcategory?' · '+esc(e.subcategory):''}${e.who?' · '+esc(e.who):''}${e.paymentDetail?'（'+esc(e.paymentDetail)+'）':''}</small>${Array.isArray(e.splits)&&e.splits.length?'<br><small>'+e.splits.map(x=>esc(x.category)+' '+yen(x.amount)).join(' / ')+'</small>':''}</div><div style="display:flex;align-items:center;gap:10px"><div class="amount">${yen(e.amount)}</div><button class="btn secondary" style="padding:7px 10px;font-size:12px" onclick="editExpense('${e.id}')">編集</button><button class="btn danger" style="padding:7px 10px;font-size:12px" onclick="removeExpense('${e.id}')">削除</button></div></div>`).join(''):'<div class="empty">まだ支出がありません</div>';
   document.getElementById('income').value=modeBudget().income||0; document.getElementById('saving').value=modeBudget().saving||0;
-  renderCats(); renderPaymentMethods(); renderBudget(); renderPie(); renderSplitRows(); renderCarLoan(); renderFixedRules(); renderFixedCheck(); renderMobilePreview();
+  renderCats(); renderPaymentMethods(); renderBudget(); renderPie(); renderSplitRows(); renderCarLoan(); renderFixedRules(); renderFixedCheck(); renderMobilePreview(); renderFinance();
 }
 const subcategoryOptions={
  '食費':['食材','飲料','外食'], '日用品':['洗剤・消耗品','生活用品'],
@@ -1705,6 +1735,55 @@ function registerSmartBatch(){
  if(added){persist();showTsvPurchase();renderSmartBatch();tsvStatus(`${added}件の買い物を登録できたよ！重複は除外したよ 🩷`)}
 }
 
+// --- Ver.10.54: 銀行・保育料・立替 ---
+const bankNames=['三井住友銀行','SBIドコモ銀行','鹿児島銀行','楽天銀行'];
+function finance(){return data.financeModes[currentMode()]}
+function uid(){return (typeof crypto!=='undefined'&&crypto.randomUUID)?crypto.randomUUID():String(Date.now())+'_'+Math.random().toString(36).slice(2)}
+function validYen(x,allowZero=false){return x!==''&&Number.isSafeInteger(Number(x))&&Number(x)>=(allowZero?0:1)}
+function bankOptions(selected){return bankNames.map(n=>`<option value="${n}" ${n===selected?'selected':''}>${n}</option>`).join('')}
+function balanceOf(name){const f=finance();let n=Number(f.balances[name]||0);for(const t of f.transfers){if(t.from===name)n-=t.amount+t.fee;if(t.to===name)n+=t.amount;}for(const c of f.childcare)if(c.bank===name)n-=c.amount;for(const r of f.refunds)if(r.bank===name)n+=r.amount;return n}
+function setBankOpening(name){const old=finance().balances[name];const val=prompt(`${name} の初期残高（円）を入力してね。今まで登録した振込・保育料・返金を反映する前の金額だよ。`,old===undefined?'0':String(old));if(val===null)return;if(!Number.isSafeInteger(Number(val))||Number(val)<0){alert('0以上の整数を入力してね');return}finance().balances[name]=Number(val);persist()}
+function initFinanceInputs(){
+ const now=new Date(),today=`${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
+ for(const id of ['transferDate','childPaidDate','advanceDate','refundDate']){const el=document.getElementById(id);if(el&&!el.value)el.value=today}
+ const m=document.getElementById('childMonth');if(m&&!m.value)m.value=today.slice(0,7);
+ for(const [id,defaultName] of [['transferFrom','三井住友銀行'],['transferTo','楽天銀行'],['childBank','楽天銀行'],['refundBank','SBIドコモ銀行']]){
+ const el=document.getElementById(id);const selected=el.value||defaultName;el.innerHTML=bankOptions(selected);el.value=selected;
+ }
+}
+function renderFinance(){
+ initFinanceInputs();const f=finance();
+ document.getElementById('bankBalances').innerHTML=bankNames.map(n=>`<div class="item"><div><strong>${n}</strong><br><small>初期残高 ${f.balances[n]===undefined?'未設定':yen(f.balances[n])}</small></div><div style="text-align:right"><strong>${f.balances[n]===undefined?'未設定':yen(balanceOf(n))}</strong><br><button class="btn secondary" style="padding:6px;margin-top:5px" onclick="setBankOpening('${n}')">初期残高を設定</button></div></div>`).join('');
+ document.getElementById('transferHistory').innerHTML='<h3>最近の振込</h3>'+([...f.transfers].reverse().slice(0,10).map(t=>`<div class="item"><div><strong>${yen(t.amount)}</strong><br><small>${t.date} ${t.from} → ${t.to}${t.fee?' ／ 手数料'+yen(t.fee):''}</small></div><button class="btn danger" onclick="deleteFinance('transfers','${t.id}')">削除</button></div>`).join('')||'<p class="muted">まだ振込記録はないよ</p>');
+ const month=document.getElementById('childMonth').value,person=document.getElementById('childPerson').value;
+ const child=f.childcare.find(x=>x.month===month&&x.person===person);
+ const childId=document.getElementById('childPerson').dataset.loadedKey;
+ const newKey=currentMode()+':'+month+':'+person;
+ if(childId!==newKey){document.getElementById('childPerson').dataset.loadedKey=newKey;document.getElementById('childFee').value=child?child.fee:'';document.getElementById('childLunch').value=child&&child.lunch!==null?child.lunch:'';if(child)document.getElementById('childPaidDate').value=child.date;document.getElementById('childBank').value=child?child.bank:'楽天銀行'}
+ updateChildTotal();
+ document.getElementById('childHistory').innerHTML='<h3>保育料の登録履歴</h3>'+([...f.childcare].sort((a,b)=>b.month.localeCompare(a.month)).map(c=>`<div class="item"><div><strong>${c.person==='older'?'👧 上の子':'👶 下の子'} ${c.month}　${yen(c.amount)}</strong><br><small>${c.date} · ${c.bank} ／ 保育料 ${yen(c.fee)}${c.lunch!==null?'・給食費 '+yen(c.lunch):'・給食費未定'}</small></div><button class="btn danger" onclick="deleteFinance('childcare','${c.id}')">削除</button></div>`).join('')||'<p class="muted">まだ登録されていないよ</p>');
+ const due=f.advances.reduce((s,a)=>s+a.amount-refunded(a.id),0),total=f.advances.reduce((s,a)=>s+a.amount,0);
+ document.getElementById('advanceSummary').innerHTML=`<div class="grid" style="grid-template-columns:repeat(2,1fr);margin-bottom:12px"><div class="stat"><div class="label">立替累計</div><div class="money">${yen(total)}</div></div><div class="stat"><div class="label">未返金</div><div class="money">${yen(due)}</div></div></div>`;
+ document.getElementById('advanceOutstanding').innerHTML=f.advances.filter(a=>a.amount>refunded(a.id)).map(a=>`<div class="item" style="display:block"><div class="row"><strong>${esc(a.title)} ／ 残り ${yen(a.amount-refunded(a.id))}</strong><small>${a.date}</small></div><label style="margin-top:8px">今回の返金額（円）</label><input class="refundInput" data-id="${a.id}" type="number" min="0" max="${a.amount-refunded(a.id)}" step="1" value="0" oninput="updateRefundSum()"></div>`).join('')||'<p class="muted">未返金の立替はないよ 🩷</p>';
+ document.getElementById('advanceHistory').innerHTML='<h3>立替・返金履歴</h3>'+([...f.advances].reverse().map(a=>`<div class="item"><div><strong>${esc(a.title)} ${yen(a.amount)}</strong><br><small>${a.date} · ${esc(a.payment)} · ${refunded(a.id)>=a.amount?'返金済み':refunded(a.id)>0?'一部返金':'未返金'}（返金 ${yen(refunded(a.id))}）</small></div><button class="btn danger" onclick="deleteFinance('advances','${a.id}')">削除</button></div>`).join('')||'<p class="muted">まだ立替はないよ</p>')+([...f.refunds].reverse().slice(0,10).map(r=>`<div class="item"><div><strong>返金 ${yen(r.amount)}</strong><br><small>${r.date} → ${r.bank}</small></div><button class="btn danger" onclick="deleteFinance('refunds','${r.id}')">削除</button></div>`).join(''));
+ updateRefundSum();
+}
+function registerTransfer(){const f=finance(),from=document.getElementById('transferFrom').value,to=document.getElementById('transferTo').value,amountS=document.getElementById('transferAmount').value,feeS=document.getElementById('transferFee').value,date=document.getElementById('transferDate').value;
+ if(!date||from===to||!validYen(amountS)||!validYen(feeS||'0',true)){alert('振込日・振込元・振込先・金額を確認してね');return}
+ const amount=Number(amountS),fee=Number(feeS||0);if(!confirm(`${date} ${from} → ${to} ${yen(amount)}${fee?'（手数料 '+yen(fee)+'）':''} を登録する？`))return;
+ const id=uid();f.transfers.push({id,date,from,to,amount,fee});if(fee)data.expenses.push({id:uid(),accountMode:currentMode(),date,store:'振込手数料',amount:fee,category:'固定費',subcategory:'その他',payment:from,note:'口座間振込の手数料',sourceKey:'transferfee:'+id});document.getElementById('transferAmount').value='';document.getElementById('transferFee').value='0';persist();}
+function updateChildTotal(){const fee=Number(document.getElementById('childFee').value)||0,lunch=Number(document.getElementById('childLunch').value)||0;document.getElementById('childTotal').textContent='合計 '+yen(fee+lunch)}
+function registerChildcare(){const f=finance(),month=document.getElementById('childMonth').value,person=document.getElementById('childPerson').value,feeS=document.getElementById('childFee').value,lunchS=document.getElementById('childLunch').value,date=document.getElementById('childPaidDate').value,bank=document.getElementById('childBank').value;
+ if(!month||!date||!validYen(feeS,true)||(lunchS!==''&&!validYen(lunchS,true))){alert('保育料は0円以上の整数で入力してね。給食費が未定なら空欄でOK');return}
+ const fee=Number(feeS),lunch=lunchS===''?null:Number(lunchS),amount=fee+(lunch||0);if(!amount){alert('合計0円の場合は支払い登録せず、金額が決まってから登録してね');return}
+ if(f.childcare.some(x=>x.month===month&&x.person===person)){alert('この子のこの月の支払いは登録済みだよ。変更したい場合は履歴を削除してから再登録してね');return}
+ if(!confirm(`${person==='older'?'上の子':'下の子'} ${month}分 ${yen(amount)} を${date}に${bank}で支払ったことを確認した？`))return;
+ const id=uid();f.childcare.push({id,month,person,fee,lunch,amount,date,bank});data.expenses.push({id:uid(),accountMode:currentMode(),sourceKey:'childcare:'+id,date,amount,store:person==='older'?'保育料・上の子':'保育料・下の子',category:'固定費',subcategory:'保育料',payment:'楽天銀行・請求書払い',note:`${month}分・保育料 ${yen(fee)}・給食費 ${lunch===null?'未定':yen(lunch)}`});persist();}
+function refunded(id){return finance().refunds.reduce((s,r)=>s+(r.items||[]).filter(i=>i.advanceId===id).reduce((n,i)=>n+i.amount,0),0)}
+function registerAdvance(){const date=document.getElementById('advanceDate').value,title=document.getElementById('advanceTitle').value.trim(),value=document.getElementById('advanceAmount').value,payment=document.getElementById('advancePayment').value;if(!date||!title||!validYen(value)){alert('立替日・内容・金額を入力してね');return}finance().advances.push({id:uid(),date,title,amount:Number(value),payment});document.getElementById('advanceTitle').value='';document.getElementById('advanceAmount').value='';persist()}
+function updateRefundSum(){const el=document.getElementById('refundSum');if(el)el.textContent='今回の返金合計 '+yen([...document.querySelectorAll('.refundInput')].reduce((s,x)=>s+(Number(x.value)||0),0))}
+function registerRefund(){const f=finance(),date=document.getElementById('refundDate').value,bank=document.getElementById('refundBank').value,items=[];for(const x of document.querySelectorAll('.refundInput')){if(!validYen(x.value,true)){alert('返金額を0以上の整数で入力してね');return}const amount=Number(x.value);const a=f.advances.find(a=>a.id===x.dataset.id);if(!a||amount>a.amount-refunded(a.id)){alert('返金額が未返金額を超えているよ');return}if(amount)items.push({advanceId:a.id,amount})}const amount=items.reduce((s,x)=>s+x.amount,0);if(!date||!amount){alert('返金額を入力してね');return}if(!confirm(`${date} ${bank}への返金 ${yen(amount)} を確認した？`))return;f.refunds.push({id:uid(),date,bank,amount,items});persist()}
+function deleteFinance(type,id){const f=finance(),item=f[type].find(x=>x.id===id);if(!item)return;if(type==='advances'&&f.refunds.some(r=>r.items.some(i=>i.advanceId===id))){alert('先に紐づく返金記録を削除してね');return}if(!confirm('この記録を削除する？ 元に戻せないよ'))return;f[type]=f[type].filter(x=>x.id!==id);if(type==='childcare')data.expenses=data.expenses.filter(e=>e.sourceKey!=='childcare:'+id);if(type==='transfers')data.expenses=data.expenses.filter(e=>e.sourceKey!=='transferfee:'+id);if(type==='childcare')document.getElementById('childPerson').dataset.loadedKey='';persist()}
 clearForm();applyTheme();persist();
 </script>
 </body>
