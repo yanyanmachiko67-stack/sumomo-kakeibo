@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>すもも家計簿 Ver.10.52（固定費テスト）</title>
+<title>すもも家計簿 Ver.10.53（楽天モバイル自動計算）</title>
 <style>
 :root{--pink:#e88ca8;--pink2:#f7dce5;--ink:#3d3438;--muted:#8b7d83;--bg:#fff8fa;--card:#fff;--line:#eadde2;--green:#79b89a;--blue:#8caed8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
@@ -27,7 +27,7 @@ h2{font-size:18px;margin:4px 0 12px} h3{font-size:15px;margin:4px 0 10px}
 </head>
 <body>
 <div class="app">
-  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.52（固定費テスト） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
+  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.53（楽天モバイル自動計算） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
   <div class="card" style="margin:6px 0 12px;padding:12px"><div class="row" style="flex-wrap:wrap"><div><strong>🌷 家計簿モード</strong><div class="muted" style="font-size:12px">テストと本番の支出は別々に集計するよ</div></div><select id="accountMode" style="width:auto;min-width:150px" onchange="changeAccountMode(this.value)"><option value="test">🧪 テスト用</option><option value="live">💰 本番用</option></select></div><small id="modeHelp" class="muted"></small></div>
   <nav>
     <button class="tab active" data-page="home">ホーム</button>
@@ -218,6 +218,20 @@ h2{font-size:18px;margin:4px 0 12px} h3{font-size:15px;margin:4px 0 10px}
         <div id="fixedCheckList"></div>
       </div>
     </div>
+    <div class="card" id="rakutenMobileCard">
+      <h2>📱 楽天モバイル（ポイント自動計算）</h2>
+      <p class="muted" style="font-size:13px">利用料金と使った楽天ポイントを入力すると、楽天カードで支払う金額を自動計算するよ。ポイントで全額払った月も、支出0円の履歴を残せるよ。<strong>入力だけでは登録されないよ。</strong></p>
+      <div class="formgrid">
+        <div><label for="mobileUsageMonth">対象の利用月</label><input id="mobileUsageMonth" type="month" onchange="renderMobilePreview()"></div>
+        <div><label for="mobileDate">楽天カード引落日（実際の日付を確認）</label><input id="mobileDate" type="date" onchange="renderMobilePreview()"></div>
+        <div><label for="mobileCharge">携帯料金（税込・円）</label><input id="mobileCharge" type="number" min="0" step="1" inputmode="numeric" placeholder="例：3500" oninput="renderMobilePreview()"></div>
+        <div><label for="mobilePoints">楽天ポイント利用額（円）</label><input id="mobilePoints" type="number" min="0" step="1" inputmode="numeric" placeholder="例：3500" oninput="renderMobilePreview()"></div>
+      </div>
+      <div id="mobilePreview" style="margin-top:12px;padding:12px;background:var(--bg);border-radius:14px" aria-live="polite"></div>
+      <p class="muted" style="font-size:12px">カード引落日は目安として翌月27日（土日なら翌営業日）を表示。祝日・カードの締め日・実際の請求時期によって変わるので、必ず明細で確認して修正してね。カード代金の口座引落を別の支出として重複登録しないでね。</p>
+      <div class="actions"><button class="btn" id="mobileRegisterBtn" onclick="registerMobileExpense()">🩷 確認して登録</button></div>
+      <div id="mobileHistory" style="margin-top:12px"></div>
+    </div>
     <div class="card">
       <h2>📅 その他の毎月の固定費</h2>
       <p class="muted" style="font-size:12px">奨学金・携帯代・保育料などの予定を登録できるよ。金額が変わるものは月ごとに確認してから計上してね。予定設定は共通、支出の登録はテストと本番で別々だよ。</p>
@@ -345,7 +359,7 @@ function render(){
   const recent=[...modeExpenses()].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,8);
   document.getElementById('recent').innerHTML=recent.length?recent.map(e=>`<div class="item"><div><strong>${esc(e.store||'支出')}</strong><span class="cat">${Array.isArray(e.splits)&&e.splits.length?'カテゴリ分け':esc(e.category)}</span><br><small>${esc(e.date)} · ${esc(e.payment||'')}${e.subcategory?' · '+esc(e.subcategory):''}${e.who?' · '+esc(e.who):''}${e.paymentDetail?'（'+esc(e.paymentDetail)+'）':''}</small>${Array.isArray(e.splits)&&e.splits.length?'<br><small>'+e.splits.map(x=>esc(x.category)+' '+yen(x.amount)).join(' / ')+'</small>':''}</div><div style="display:flex;align-items:center;gap:10px"><div class="amount">${yen(e.amount)}</div><button class="btn secondary" style="padding:7px 10px;font-size:12px" onclick="editExpense('${e.id}')">編集</button><button class="btn danger" style="padding:7px 10px;font-size:12px" onclick="removeExpense('${e.id}')">削除</button></div></div>`).join(''):'<div class="empty">まだ支出がありません</div>';
   document.getElementById('income').value=modeBudget().income||0; document.getElementById('saving').value=modeBudget().saving||0;
-  renderCats(); renderPaymentMethods(); renderBudget(); renderPie(); renderSplitRows(); renderCarLoan(); renderFixedRules(); renderFixedCheck();
+  renderCats(); renderPaymentMethods(); renderBudget(); renderPie(); renderSplitRows(); renderCarLoan(); renderFixedRules(); renderFixedCheck(); renderMobilePreview();
 }
 const subcategoryOptions={
  '食費':['食材','飲料','外食'], '日用品':['洗剤・消耗品','生活用品'],
@@ -598,6 +612,55 @@ function registerFixedEntry(key){
  const mode=currentMode()==='test'?'テスト':'本番';
  if(!confirm(`【${mode}用】${actual} ${entry.name} ${yen(amount)} を登録する？\n※実際の引き落としを自動確認する機能ではないよ。`))return;
  data.expenses.push({accountMode:currentMode(),id:crypto.randomUUID?crypto.randomUUID():String(Date.now()),sourceKey:key,date:actual,amount,store:entry.name,category:entry.category,payment:'口座引落',note:`毎月の固定費（${year}年${month}月分・確認登録）`});persist();
+}
+
+// 楽天モバイル: 利用月単位でテスト・本番を独立管理。0円も履歴として保存する。
+function mobileKey(month){return 'rakutenmobile:'+month;}
+function mobileSuggestedDate(month){
+ const [y,m]=month.split('-').map(Number);
+ if(!y||!m||m<1||m>12)return '';
+ const d=new Date(y,m,27); // 利用月の翌月27日（目安）
+ while(d.getDay()===0||d.getDay()===6)d.setDate(d.getDate()+1);
+ return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
+function initMobileInputs(){
+ const el=document.getElementById('mobileUsageMonth');
+ if(!el.value){const d=new Date();el.value=`${d.getFullYear()}-${pad(d.getMonth()+1)}`;}
+ const date=document.getElementById('mobileDate');
+ if(!date.value||date.dataset.month!==el.value){date.value=mobileSuggestedDate(el.value);date.dataset.month=el.value;}
+}
+function mobileExisting(month){return modeExpenses().find(e=>e.sourceKey===mobileKey(month));}
+function renderMobilePreview(){
+ const target=document.getElementById('mobilePreview');if(!target)return;
+ initMobileInputs();
+ const month=document.getElementById('mobileUsageMonth').value;
+ const chargeRaw=document.getElementById('mobileCharge').value;
+ const pointsRaw=document.getElementById('mobilePoints').value;
+ const charge=Number(chargeRaw),points=Number(pointsRaw);
+ const valid=chargeRaw!==''&&pointsRaw!==''&&Number.isSafeInteger(charge)&&Number.isSafeInteger(points)&&charge>=0&&points>=0&&points<=charge;
+ const amount=valid?charge-points:0;
+ target.innerHTML=valid?`<div class="row"><span>携帯料金</span><strong>${yen(charge)}</strong></div><div class="row" style="margin-top:6px"><span>ポイント利用</span><strong>−${yen(points)}</strong></div><div class="row" style="margin-top:10px;border-top:1px solid var(--line);padding-top:10px"><strong>楽天カード支払額</strong><strong style="font-size:22px;color:var(--accent-text)">${yen(amount)}</strong></div><small class="muted">${amount===0?'🎉 全額ポイント払い！支出合計には加算せず、履歴だけ残すよ。':'この金額だけ支出合計・固定費に反映するよ。'}</small>`:'<span class="muted">携帯料金とポイント利用額を入力してね。ポイントは料金以下の金額にしてね。</span>';
+ const existing=mobileExisting(month);
+ const btn=document.getElementById('mobileRegisterBtn');
+ btn.disabled=!valid||!!existing;
+ btn.textContent=existing?'この月は登録済み':'🩷 確認して登録';
+ const history=modeExpenses().filter(e=>String(e.sourceKey||'').startsWith('rakutenmobile:')).sort((a,b)=>b.sourceKey.localeCompare(a.sourceKey));
+ document.getElementById('mobileHistory').innerHTML='<h3>📋 登録履歴（現在のモード）</h3>'+(history.length?history.map(e=>`<div class="item"><div><strong>${esc(e.sourceKey.slice(14))}月分　${yen(e.amount)}</strong><br><small>${esc(e.date)} · 楽天カード · 料金 ${yen(e.mobileCharge)}／ポイント ${yen(e.mobilePoints)}</small></div><button class="btn danger" style="padding:7px 10px;font-size:12px" onclick="removeExpense('${e.id}')">削除</button></div>`).join(''):'<p class="muted">まだ登録していないよ。</p>');
+}
+function registerMobileExpense(){
+ initMobileInputs();
+ const month=document.getElementById('mobileUsageMonth').value,date=document.getElementById('mobileDate').value;
+ const chargeRaw=document.getElementById('mobileCharge').value,pointsRaw=document.getElementById('mobilePoints').value;
+ const charge=Number(chargeRaw),points=Number(pointsRaw);
+ if(chargeRaw===''||pointsRaw===''||!Number.isSafeInteger(charge)||!Number.isSafeInteger(points)||charge<0||points<0||points>charge){alert('料金とポイント利用額を確認してね。ポイントは料金以下にしてね。');return;}
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||Number.isNaN(dateObj(date).getTime())||dateObj(date).getFullYear()+'-'+pad(dateObj(date).getMonth()+1)+'-'+pad(dateObj(date).getDate())!==date){alert('正しい引落日を入力してね');return;}
+ if(mobileExisting(month)){alert('このモードではこの利用月は登録済みだよ');return;}
+ const amount=charge-points;
+ if(similarExpenses(date,'楽天モバイル',amount).length&&!confirm('同じ日付・金額の楽天モバイルがすでにあるよ。二重登録でないか確認してね。'))return;
+ const mode=currentMode()==='test'?'🧪テスト':'💰本番';
+ if(!confirm(`【${mode}】楽天モバイル ${month}利用分\n携帯料金：${yen(charge)}\nポイント：−${yen(points)}\n支出：${yen(amount)}\nカード引落日：${date}\n\n明細を確認して登録する？`))return;
+ data.expenses.push({accountMode:currentMode(),id:crypto.randomUUID?crypto.randomUUID():String(Date.now()),sourceKey:mobileKey(month),date,amount,store:'楽天モバイル',category:'固定費',subcategory:'通信',payment:'楽天カード',mobileCharge:charge,mobilePoints:points,note:`${month}利用分・楽天ポイント${yen(points)}充当${amount===0?'（全額ポイント払い）':''}`});
+ persist();alert(amount===0?'0円の支払い履歴を登録したよ！支出合計には加算されないよ 🩷':'楽天モバイルを登録したよ 🩷');
 }
 function exportData(){const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='sumomo-kakeibo-backup.json';a.click();URL.revokeObjectURL(a.href)}
 document.getElementById('importFile').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const imported=JSON.parse(r.result);if(!imported||typeof imported!=='object'||!Array.isArray(imported.expenses)){throw Error('invalid backup')}data=normalizeData(imported);persist();alert('読み込んだよ！')}catch{alert('読み込みに失敗しました')}};r.readAsText(f)});
