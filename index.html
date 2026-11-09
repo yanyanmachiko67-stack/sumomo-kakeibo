@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>すもも家計簿 Ver.10.55.0（口座・保育料・立替金）</title>
+<title>すもも家計簿 Ver.10.55.1（口座・保育料・立替金）</title>
 <style>
 :root{--pink:#e88ca8;--pink2:#f7dce5;--ink:#3d3438;--muted:#8b7d83;--bg:#fff8fa;--card:#fff;--line:#eadde2;--green:#79b89a;--blue:#8caed8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
@@ -33,7 +33,7 @@ input[type="month"]::-webkit-datetime-edit,input[type="date"]::-webkit-datetime-
 </head>
 <body>
 <div class="app">
-  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.55.0（口座・保育料・立替金） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
+  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.55.1（口座・保育料・立替金） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
   <div class="card" style="margin:6px 0 12px;padding:12px"><div class="row" style="flex-wrap:wrap"><div><strong>🌷 家計簿モード</strong><div class="muted" style="font-size:12px">テストと本番の支出は別々に集計するよ</div></div><select id="accountMode" style="width:auto;min-width:150px" onchange="changeAccountMode(this.value)"><option value="test">🧪 テスト用</option><option value="live">💰 本番用</option></select></div><small id="modeHelp" class="muted"></small></div>
   <nav>
     <button class="tab active" data-page="home">ホーム</button>
@@ -344,7 +344,7 @@ function normalizeData(d){
    const b=result.modeBudgets[mode]||{};
    result.modeBudgets[mode]={income:Number(b.income)||0,saving:Number(b.saving)||0,categoryBudgets:b.categoryBudgets&&typeof b.categoryBudgets==='object'?b.categoryBudgets:{}};
  }
-  // Ver.10.55.0: 新しい口座・保育料・立替データをモード別に初期化。
+  // Ver.10.55.1: 新しい口座・保育料・立替データをモード別に初期化。
   // 既存の登録内容がある場合は維持する。
   if(!result.financeModes || typeof result.financeModes!=='object' || Array.isArray(result.financeModes)) result.financeModes={};
   for(const mode of ['test','live']){
@@ -1773,7 +1773,7 @@ function registerSmartBatch(){
  if(added){persist();showTsvPurchase();renderSmartBatch();tsvStatus(`${added}件の買い物を登録できたよ！重複は除外したよ 🩷`)}
 }
 
-// --- Ver.10.55.0: 銀行・保育料・立替 ---
+// --- Ver.10.55.1: 銀行・保育料・立替 ---
 const bankNames=['三井住友銀行','SBIドコモ銀行','鹿児島銀行','楽天銀行'];
 function finance(){return data.financeModes[currentMode()]}
 function uid(){return (typeof crypto!=='undefined'&&crypto.randomUUID)?crypto.randomUUID():String(Date.now())+'_'+Math.random().toString(36).slice(2)}
@@ -1824,7 +1824,7 @@ function registerRefund(){const f=finance(),date=document.getElementById('refund
 function deleteFinance(type,id){const f=finance(),item=f[type].find(x=>x.id===id);if(!item)return;if(type==='advances'&&f.refunds.some(r=>r.items.some(i=>i.advanceId===id))){alert('先に紐づく返金記録を削除してね');return}if(!confirm('この記録を削除する？ 元に戻せないよ'))return;f[type]=f[type].filter(x=>x.id!==id);if(type==='childcare')data.expenses=data.expenses.filter(e=>e.sourceKey!=='childcare:'+id);if(type==='transfers')data.expenses=data.expenses.filter(e=>e.sourceKey!=='transferfee:'+id);if(type==='childcare')document.getElementById('childPerson').dataset.loadedKey='';persist()}
 clearForm();applyTheme();persist();
 
-// Ver.10.55.0: 楽天カードPDFの端末内読み取り。PDFの生データは保存しない。
+// Ver.10.55.1: 楽天カードPDFの端末内読み取り。PDFの生データは保存しない。
 let rakutenPdfRows=[];
 let rakutenPdfFingerprint='';
 function rakutenStatus(msg){document.getElementById('rakutenPdfStatus').textContent=msg;}
@@ -1895,12 +1895,14 @@ async function loadRakutenPdf(file){
    const page=await pdf.getPage(i);
    const lines=rakutenPdfLines((await page.getTextContent()).items);
    const joined=lines.map(l=>l.parts.map(p=>p.str).join(' ')).join('\n');
-   if(/ご利用代金請求明細書/.test(joined)&&/楽天.*カード/.test(joined))verified=true;
-   if(!month){const m=joined.match(/(20\d\d)年\s*(\d{1,2})月ご請求金額/);if(m)month=m[1]+'-'+String(m[2]).padStart(2,'0');}
+   // PDF.js may split Japanese glyphs into individual text items.
+   const compact=joined.replace(/[\s\u3000]/g,'');
+   if((/ご利用代金請求明細書/.test(compact)||/ご利用明細/.test(compact))&&/楽天(?:PINK)?カード|楽天カード株式会社/.test(compact))verified=true;
+   if(!month){const m=compact.match(/(20\d\d)年(\d{1,2})月ご請求金額/);if(m)month=m[1]+'-'+String(m[2]).padStart(2,'0');}
    for(const line of lines){const row=rakutenParseLine(line);if(row)all.push(row);}
   }
-  if(!verified)throw new Error('楽天カードの請求明細書か確認できなかったよ。別のPDF形式かもしれないよ');
-  if(!all.length)throw new Error('利用明細の行を読み取れなかったよ');
+  if(!verified&&all.length===0)throw new Error('楽天カードの見出し・明細行を読み取れなかったよ。PDFの文字配置を確認してね');
+  if(!all.length)throw new Error('利用明細の行を読み取れなかったよ。PDFの文字配置が想定と違う可能性があるよ');
   // 同じ金額・日付の複数購入を区別するため、明細内の行番号を保持。
   all=all.map((r,idx)=>({...r,idx}));
   rakutenPdfRows=all;
