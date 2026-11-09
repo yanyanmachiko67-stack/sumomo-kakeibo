@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>すもも家計簿 Ver.10.54.3（口座・保育料・立替金）</title>
+<title>すもも家計簿 Ver.10.55.0（口座・保育料・立替金）</title>
 <style>
 :root{--pink:#e88ca8;--pink2:#f7dce5;--ink:#3d3438;--muted:#8b7d83;--bg:#fff8fa;--card:#fff;--line:#eadde2;--green:#79b89a;--blue:#8caed8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
@@ -33,7 +33,7 @@ input[type="month"]::-webkit-datetime-edit,input[type="date"]::-webkit-datetime-
 </head>
 <body>
 <div class="app">
-  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.54.3（口座・保育料・立替金） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
+  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.55.0（口座・保育料・立替金） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
   <div class="card" style="margin:6px 0 12px;padding:12px"><div class="row" style="flex-wrap:wrap"><div><strong>🌷 家計簿モード</strong><div class="muted" style="font-size:12px">テストと本番の支出は別々に集計するよ</div></div><select id="accountMode" style="width:auto;min-width:150px" onchange="changeAccountMode(this.value)"><option value="test">🧪 テスト用</option><option value="live">💰 本番用</option></select></div><small id="modeHelp" class="muted"></small></div>
   <nav>
     <button class="tab active" data-page="home">ホーム</button>
@@ -104,6 +104,23 @@ input[type="month"]::-webkit-datetime-edit,input[type="date"]::-webkit-datetime-
         </div>
       </div>
       <div class="actions"><button class="btn" id="expenseSaveBtn" onclick="saveExpense()">登録する</button><button class="btn secondary" onclick="clearForm()">クリア</button></div>
+    </div>
+    <div class="card" id="rakutenPdfImporter">
+      <h2>💳 楽天カードPDF明細取り込み（確認式）</h2>
+      <p class="muted" style="font-size:13px">楽天カードの「ご利用代金請求明細書」PDFを選んでね。<strong>読み込んだだけでは登録されないよ。</strong> PDFはこの端末内で解析するよ。</p>
+      <input type="file" id="rakutenPdfFile" accept=".pdf,application/pdf" onchange="loadRakutenPdf(this.files[0])">
+      <p id="rakutenPdfStatus" class="muted" role="status" aria-live="polite">カード番号や銀行口座の情報は保存しないよ。PDFをGitHubにアップロードしないでね。</p>
+      <div id="rakutenPdfReview" style="display:none">
+        <div class="formgrid" style="margin:12px 0">
+          <div><label>登録するカード名</label><select id="rakutenPdfPayment"></select></div>
+          <div><label>明細の請求月</label><input id="rakutenPdfMonth" type="month" readonly></div>
+        </div>
+        <p class="muted" style="font-size:12px">楽天ペイへのチャージは初期状態で対象外。スマホの分割払いなども確認してね。Amazonの商品名は明細だけでは分からないよ。登録済みと似た支出はチェックを外して確認してね。</p>
+        <div class="actions"><button class="btn secondary" type="button" onclick="rakutenSelectAll(false)">すべて解除</button><button class="btn secondary" type="button" onclick="rakutenSelectAll(true)">未登録候補を選択</button></div>
+        <div id="rakutenPdfRows" class="list" style="margin-top:12px"></div>
+        <p id="rakutenPdfTotal" style="font-weight:700;margin-top:12px"></p>
+        <button class="btn" type="button" onclick="registerRakutenPdf()">🩷 選んだ明細をまとめて登録</button>
+      </div>
     </div>
     <div class="card" id="tsvImporter">
       <h2>📩 スマートレシート取り込み（テスト版）</h2>
@@ -327,7 +344,7 @@ function normalizeData(d){
    const b=result.modeBudgets[mode]||{};
    result.modeBudgets[mode]={income:Number(b.income)||0,saving:Number(b.saving)||0,categoryBudgets:b.categoryBudgets&&typeof b.categoryBudgets==='object'?b.categoryBudgets:{}};
  }
-  // Ver.10.54.3: 新しい口座・保育料・立替データをモード別に初期化。
+  // Ver.10.55.0: 新しい口座・保育料・立替データをモード別に初期化。
   // 既存の登録内容がある場合は維持する。
   if(!result.financeModes || typeof result.financeModes!=='object' || Array.isArray(result.financeModes)) result.financeModes={};
   for(const mode of ['test','live']){
@@ -1756,7 +1773,7 @@ function registerSmartBatch(){
  if(added){persist();showTsvPurchase();renderSmartBatch();tsvStatus(`${added}件の買い物を登録できたよ！重複は除外したよ 🩷`)}
 }
 
-// --- Ver.10.54.3: 銀行・保育料・立替 ---
+// --- Ver.10.55.0: 銀行・保育料・立替 ---
 const bankNames=['三井住友銀行','SBIドコモ銀行','鹿児島銀行','楽天銀行'];
 function finance(){return data.financeModes[currentMode()]}
 function uid(){return (typeof crypto!=='undefined'&&crypto.randomUUID)?crypto.randomUUID():String(Date.now())+'_'+Math.random().toString(36).slice(2)}
@@ -1806,6 +1823,127 @@ function updateRefundSum(){const el=document.getElementById('refundSum');if(el)e
 function registerRefund(){const f=finance(),date=document.getElementById('refundDate').value,bank=document.getElementById('refundBank').value,items=[];for(const x of document.querySelectorAll('.refundInput')){if(!validYen(x.value,true)){alert('返金額を0以上の整数で入力してね');return}const amount=Number(x.value);const a=f.advances.find(a=>a.id===x.dataset.id);if(!a||amount>a.amount-refunded(a.id)){alert('返金額が未返金額を超えているよ');return}if(amount)items.push({advanceId:a.id,amount})}const amount=items.reduce((s,x)=>s+x.amount,0);if(!date||!amount){alert('返金額を入力してね');return}if(!confirm(`${date} ${bank}への返金 ${yen(amount)} を確認した？`))return;f.refunds.push({id:uid(),date,bank,amount,items});persist();document.getElementById('advanceNotice').textContent='✅ '+yen(amount)+' の返金を登録したよ！ 返金履歴に反映されたよ。';document.getElementById('advanceHistory').scrollIntoView({behavior:'smooth',block:'start'});}
 function deleteFinance(type,id){const f=finance(),item=f[type].find(x=>x.id===id);if(!item)return;if(type==='advances'&&f.refunds.some(r=>r.items.some(i=>i.advanceId===id))){alert('先に紐づく返金記録を削除してね');return}if(!confirm('この記録を削除する？ 元に戻せないよ'))return;f[type]=f[type].filter(x=>x.id!==id);if(type==='childcare')data.expenses=data.expenses.filter(e=>e.sourceKey!=='childcare:'+id);if(type==='transfers')data.expenses=data.expenses.filter(e=>e.sourceKey!=='transferfee:'+id);if(type==='childcare')document.getElementById('childPerson').dataset.loadedKey='';persist()}
 clearForm();applyTheme();persist();
+
+// Ver.10.55.0: 楽天カードPDFの端末内読み取り。PDFの生データは保存しない。
+let rakutenPdfRows=[];
+let rakutenPdfFingerprint='';
+function rakutenStatus(msg){document.getElementById('rakutenPdfStatus').textContent=msg;}
+function rakutenPdfLibrary(){
+ return new Promise((resolve,reject)=>{
+  if(window.pdfjsLib){resolve(window.pdfjsLib);return;}
+  const script=document.createElement('script');
+  script.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+  script.onload=()=>{
+   if(!window.pdfjsLib){reject(new Error('PDF読み取りライブラリを読み込めません'));return;}
+   window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+   resolve(window.pdfjsLib);
+  };
+  script.onerror=()=>reject(new Error('PDF読み取りライブラリの通信に失敗しました'));
+  document.head.appendChild(script);
+ });
+}
+function rakutenPdfLines(items){
+ const lines=[];
+ for(const t of items){
+  const str=String(t.str||'').trim();if(!str)continue;
+  const x=t.transform[4],y=t.transform[5];
+  let line=lines.find(l=>Math.abs(l.y-y)<2.5);
+  if(!line){line={y,parts:[]};lines.push(line);}
+  line.parts.push({x,str});
+ }
+ return lines.sort((a,b)=>b.y-a.y).map(l=>({...l,parts:l.parts.sort((a,b)=>a.x-b.x)}));
+}
+function rakutenParseLine(line){
+ const parts=line.parts;
+ const date=parts.find(p=>p.x<63&&/^20\d\d\/\d\d\/\d\d$/.test(p.str));
+ if(!date)return null;
+ const store=parts.filter(p=>p.x>=63&&p.x<180).map(p=>p.str).join(' ').replace(/\s+/g,' ').trim();
+ const pay=parts.filter(p=>p.x>=205&&p.x<300).map(p=>p.str).join(' ');
+ const amountCell=parts.filter(p=>p.x>=290&&p.x<350).map(p=>p.str).find(x=>/^[-\d,]+$/.test(x));
+ const billedCell=parts.filter(p=>p.x>=438&&p.x<490).map(p=>p.str).find(x=>/^[\d,]+$/.test(x));
+ const isInstallment=/分割|リボ|ボーナス/.test(pay);
+ const amount=Number(String(isInstallment?billedCell:amountCell||billedCell||'').replace(/,/g,''));
+ if(!store||!Number.isSafeInteger(amount)||amount<=0)return null;
+ const isCharge=/楽天ペイ残高.*チャージ|楽天ペイ残高.*オートチャージ/.test(store);
+ const isMobile=/楽天モバイル通信料/.test(store);
+ return {date:date.str.replace(/\//g,'-'),store,amount,pay,isInstallment,isCharge,isMobile,category:rakutenCategory(store),selected:!isCharge&&!isInstallment&&!isMobile};
+}
+function rakutenCategory(store){
+ if(/楽天モバイル|通信料/.test(store))return '固定費';
+ if(/ﾆｼﾏﾂﾔ|ニシマツヤ|西松屋|バースデイ/.test(store))return '子ども費';
+ if(/ドラッグ|ﾀﾞｲﾚﾂｸｽ|ダイレックス/.test(store))return '日用品';
+ if(/美容|COSME|コスメ|PERFUME/.test(store))return 'ファッション・美容費';
+ if(/ピザ|ﾋﾟｻﾞ|ﾓｽ|モス/.test(store))return '食費';
+ return 'その他';
+}
+function rakutenPdfKey(row){return 'rakutenpdf:'+rakutenPdfFingerprint+':'+row.idx;}
+function rakutenSimilar(row){return modeExpenses().some(e=>e.sourceKey===rakutenPdfKey(row)|| (e.date===row.date&&Number(e.amount)===row.amount&&String(e.store||'').trim()===row.store));}
+async function loadRakutenPdf(file){
+ const review=document.getElementById('rakutenPdfReview');review.style.display='none';rakutenPdfRows=[];
+ if(!file)return;
+ if(!/\.pdf$/i.test(file.name)&&file.type!=='application/pdf'){rakutenStatus('PDFファイルを選んでね');return;}
+ if(file.size>15*1024*1024){rakutenStatus('15MB以下のPDFを選んでね');return;}
+ rakutenStatus('PDFを読み取っているよ…（初回は通信が必要）');
+ try{
+  const pdfjs=await rakutenPdfLibrary();
+  const bytes=await file.arrayBuffer();
+  const digest=await crypto.subtle.digest('SHA-256',bytes);
+  const pdf=await pdfjs.getDocument({data:new Uint8Array(bytes)}).promise;
+  if(pdf.numPages>15)throw new Error('15ページ以内の明細で試してね');
+  let all=[];let month='';let verified=false;
+  for(let i=1;i<=pdf.numPages;i++){
+   const page=await pdf.getPage(i);
+   const lines=rakutenPdfLines((await page.getTextContent()).items);
+   const joined=lines.map(l=>l.parts.map(p=>p.str).join(' ')).join('\n');
+   if(/ご利用代金請求明細書/.test(joined)&&/楽天.*カード/.test(joined))verified=true;
+   if(!month){const m=joined.match(/(20\d\d)年\s*(\d{1,2})月ご請求金額/);if(m)month=m[1]+'-'+String(m[2]).padStart(2,'0');}
+   for(const line of lines){const row=rakutenParseLine(line);if(row)all.push(row);}
+  }
+  if(!verified)throw new Error('楽天カードの請求明細書か確認できなかったよ。別のPDF形式かもしれないよ');
+  if(!all.length)throw new Error('利用明細の行を読み取れなかったよ');
+  // 同じ金額・日付の複数購入を区別するため、明細内の行番号を保持。
+  all=all.map((r,idx)=>({...r,idx}));
+  rakutenPdfRows=all;
+  // 同じPDFを再度取り込んでも検出できる識別子。カード番号は含めない。
+  rakutenPdfFingerprint=Array.from(new Uint8Array(digest)).slice(0,12).map(b=>b.toString(16).padStart(2,'0')).join('');
+  const payment=document.getElementById('rakutenPdfPayment');
+  const names=[...new Set(['楽天カード（自分用）','楽天カード（家族カード）',...data.paymentMethods.filter(x=>x.type==='credit').map(x=>x.name)])];
+  payment.innerHTML=names.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
+  document.getElementById('rakutenPdfMonth').value=month;
+  review.style.display='block';renderRakutenPdf();
+  rakutenStatus(`${all.length}件の明細を読み取ったよ。金額・分類・重複を確認してから登録してね。`);
+ }catch(e){rakutenStatus('読み込みできなかったよ：'+e.message);}
+}
+function rakutenSelectAll(checked){rakutenPdfRows.forEach(r=>{if(!rakutenSimilar(r)&&!r.isCharge&&!r.isInstallment&&!r.isMobile)r.selected=checked;});renderRakutenPdf();}
+function rakutenRowSelect(idx,checked){const r=rakutenPdfRows[idx];if(r&&!rakutenSimilar(r)){r.selected=checked;renderRakutenPdf();}}
+function rakutenRowCategory(idx,value){const r=rakutenPdfRows[idx];if(r)r.category=value;}
+function renderRakutenPdf(){
+ const el=document.getElementById('rakutenPdfRows');
+ const categories=cats().map(c=>c.name);
+ el.innerHTML=rakutenPdfRows.map((r,i)=>{
+  const duplicate=rakutenSimilar(r);
+  const flag=r.isCharge?'⚠️ 楽天ペイへのチャージ（原則登録しない）':r.isInstallment?'⚠️ 分割払い：今回の請求額。購入時の支出との重複に注意':r.isMobile?'⚠️ 通信料：固定費と重複していないか確認':duplicate?'⚠️ 同じ支出が登録済みの可能性':'';
+  const opts=categories.map(c=>`<option value="${esc(c)}" ${c===r.category?'selected':''}>${esc(c)}</option>`).join('');
+  return `<div class="card" style="margin:0;padding:12px;${duplicate?'opacity:.65;':''}"><label style="display:flex;gap:10px;align-items:flex-start;color:var(--ink);font-size:14px"><input type="checkbox" style="width:auto;flex-shrink:0;margin-top:4px" ${r.selected&&!duplicate?'checked':''} ${duplicate?'disabled':''} onchange="rakutenRowSelect(${i},this.checked)"><span style="flex:1;min-width:0"><strong>${esc(r.store)}</strong><br><small>${esc(r.date)} ・ ${esc(r.pay)}</small></span><strong>${yen(r.amount)}</strong></label>${flag?`<div style="color:#a35b35;font-size:12px;margin:7px 0">${flag}</div>`:''}<label style="margin-top:8px">カテゴリ</label><select onchange="rakutenRowCategory(${i},this.value)" ${duplicate?'disabled':''}>${opts}</select></div>`;
+ }).join('');
+ const chosen=rakutenPdfRows.filter(r=>r.selected&&!rakutenSimilar(r));
+ document.getElementById('rakutenPdfTotal').textContent=`登録候補：${chosen.length}件 ／ 合計 ${yen(chosen.reduce((a,r)=>a+r.amount,0))}`;
+}
+function registerRakutenPdf(){
+ const selected=rakutenPdfRows.filter(r=>r.selected&&!rakutenSimilar(r));
+ if(!selected.length){alert('登録する明細をチェックしてね');return;}
+ const risky=selected.filter(r=>r.isCharge||r.isInstallment||r.isMobile);
+ if(risky.length&&!confirm(`⚠️ チャージ・分割払い・通信料が${risky.length}件含まれているよ。二重計上にならないか確認した？`))return;
+ const total=selected.reduce((a,r)=>a+r.amount,0);
+ if(!confirm(`${selected.length}件、合計${yen(total)}を「${currentMode()==='test'?'テスト':'本番'}用」に登録する？\nAmazonなどの分類は確認したかな？`))return;
+ const payment=document.getElementById('rakutenPdfPayment').value;
+ for(const r of selected){
+  data.expenses.push({id:crypto.randomUUID?crypto.randomUUID():String(Date.now()+Math.random()),accountMode:currentMode(),date:r.date,store:r.store,amount:r.amount,category:r.category,payment,paymentDetail:'',note:`楽天カードPDFから登録${r.isInstallment?'（分割請求額）':''}／請求月 ${document.getElementById('rakutenPdfMonth').value}`,sourceKey:rakutenPdfKey(r)});
+  r.selected=false;
+ }
+ persist();renderRakutenPdf();rakutenStatus(`${selected.length}件を登録したよ！ 同じPDFの再登録はチェックできるよ。`);
+}
+
 </script>
 </body>
 </html>
