@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>すもも家計簿 Ver.10.55.1（口座・保育料・立替金）</title>
+<title>すもも家計簿 Ver.10.55.2（口座・保育料・立替金）</title>
 <style>
 :root{--pink:#e88ca8;--pink2:#f7dce5;--ink:#3d3438;--muted:#8b7d83;--bg:#fff8fa;--card:#fff;--line:#eadde2;--green:#79b89a;--blue:#8caed8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
@@ -33,7 +33,7 @@ input[type="month"]::-webkit-datetime-edit,input[type="date"]::-webkit-datetime-
 </head>
 <body>
 <div class="app">
-  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.55.1（口座・保育料・立替金） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
+  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.55.2（口座・保育料・立替金） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
   <div class="card" style="margin:6px 0 12px;padding:12px"><div class="row" style="flex-wrap:wrap"><div><strong>🌷 家計簿モード</strong><div class="muted" style="font-size:12px">テストと本番の支出は別々に集計するよ</div></div><select id="accountMode" style="width:auto;min-width:150px" onchange="changeAccountMode(this.value)"><option value="test">🧪 テスト用</option><option value="live">💰 本番用</option></select></div><small id="modeHelp" class="muted"></small></div>
   <nav>
     <button class="tab active" data-page="home">ホーム</button>
@@ -344,7 +344,7 @@ function normalizeData(d){
    const b=result.modeBudgets[mode]||{};
    result.modeBudgets[mode]={income:Number(b.income)||0,saving:Number(b.saving)||0,categoryBudgets:b.categoryBudgets&&typeof b.categoryBudgets==='object'?b.categoryBudgets:{}};
  }
-  // Ver.10.55.1: 新しい口座・保育料・立替データをモード別に初期化。
+  // Ver.10.55.2: 新しい口座・保育料・立替データをモード別に初期化。
   // 既存の登録内容がある場合は維持する。
   if(!result.financeModes || typeof result.financeModes!=='object' || Array.isArray(result.financeModes)) result.financeModes={};
   for(const mode of ['test','live']){
@@ -1773,7 +1773,7 @@ function registerSmartBatch(){
  if(added){persist();showTsvPurchase();renderSmartBatch();tsvStatus(`${added}件の買い物を登録できたよ！重複は除外したよ 🩷`)}
 }
 
-// --- Ver.10.55.1: 銀行・保育料・立替 ---
+// --- Ver.10.55.2: 銀行・保育料・立替 ---
 const bankNames=['三井住友銀行','SBIドコモ銀行','鹿児島銀行','楽天銀行'];
 function finance(){return data.financeModes[currentMode()]}
 function uid(){return (typeof crypto!=='undefined'&&crypto.randomUUID)?crypto.randomUUID():String(Date.now())+'_'+Math.random().toString(36).slice(2)}
@@ -1824,7 +1824,7 @@ function registerRefund(){const f=finance(),date=document.getElementById('refund
 function deleteFinance(type,id){const f=finance(),item=f[type].find(x=>x.id===id);if(!item)return;if(type==='advances'&&f.refunds.some(r=>r.items.some(i=>i.advanceId===id))){alert('先に紐づく返金記録を削除してね');return}if(!confirm('この記録を削除する？ 元に戻せないよ'))return;f[type]=f[type].filter(x=>x.id!==id);if(type==='childcare')data.expenses=data.expenses.filter(e=>e.sourceKey!=='childcare:'+id);if(type==='transfers')data.expenses=data.expenses.filter(e=>e.sourceKey!=='transferfee:'+id);if(type==='childcare')document.getElementById('childPerson').dataset.loadedKey='';persist()}
 clearForm();applyTheme();persist();
 
-// Ver.10.55.1: 楽天カードPDFの端末内読み取り。PDFの生データは保存しない。
+// Ver.10.55.2: 楽天カードPDFの端末内読み取り。PDFの生データは保存しない。
 let rakutenPdfRows=[];
 let rakutenPdfFingerprint='';
 function rakutenStatus(msg){document.getElementById('rakutenPdfStatus').textContent=msg;}
@@ -1854,19 +1854,23 @@ function rakutenPdfLines(items){
  return lines.sort((a,b)=>b.y-a.y).map(l=>({...l,parts:l.parts.sort((a,b)=>a.x-b.x)}));
 }
 function rakutenParseLine(line){
+ // PDF.jsの文字分割・座標差に対応。列のX座標は楽天カード請求書A4版に合わせる。
  const parts=line.parts;
- const date=parts.find(p=>p.x<63&&/^20\d\d\/\d\d\/\d\d$/.test(p.str));
- if(!date)return null;
- const store=parts.filter(p=>p.x>=63&&p.x<180).map(p=>p.str).join(' ').replace(/\s+/g,' ').trim();
- const pay=parts.filter(p=>p.x>=205&&p.x<300).map(p=>p.str).join(' ');
- const amountCell=parts.filter(p=>p.x>=290&&p.x<350).map(p=>p.str).find(x=>/^[-\d,]+$/.test(x));
- const billedCell=parts.filter(p=>p.x>=438&&p.x<490).map(p=>p.str).find(x=>/^[\d,]+$/.test(x));
+ const dateText=parts.filter(p=>p.x<64).map(p=>p.str).join('').replace(/\s/g,'');
+ const dateMatch=dateText.match(/20\d{2}\/\d{2}\/\d{2}/);
+ if(!dateMatch)return null;
+ const store=parts.filter(p=>p.x>=63&&p.x<181).map(p=>p.str).join(' ').replace(/\s+/g,' ').trim();
+ const pay=parts.filter(p=>p.x>=220&&p.x<300).map(p=>p.str).join(' ');
+ const numeric=parts.filter(p=>p.x>=300).map(p=>({x:p.x,str:p.str.replace(/[,\s]/g,'')})).filter(p=>/^-?\d+$/.test(p.str));
+ const cell=(lo,hi)=>numeric.find(p=>p.x>=lo&&p.x<hi)?.str;
+ const amountCell=cell(300,355);
+ const billedCell=cell(490,550)||cell(445,490);
  const isInstallment=/分割|リボ|ボーナス/.test(pay);
- const amount=Number(String(isInstallment?billedCell:amountCell||billedCell||'').replace(/,/g,''));
+ const amount=Number(isInstallment?(billedCell||''):(amountCell||billedCell||''));
  if(!store||!Number.isSafeInteger(amount)||amount<=0)return null;
- const isCharge=/楽天ペイ残高.*チャージ|楽天ペイ残高.*オートチャージ/.test(store);
+ const isCharge=/楽天ペイ残高.*(?:オート)?チャージ/.test(store);
  const isMobile=/楽天モバイル通信料/.test(store);
- return {date:date.str.replace(/\//g,'-'),store,amount,pay,isInstallment,isCharge,isMobile,category:rakutenCategory(store),selected:!isCharge&&!isInstallment&&!isMobile};
+ return {date:dateMatch[0].replace(/\//g,'-'),store,amount,pay,isInstallment,isCharge,isMobile,category:rakutenCategory(store),selected:!isCharge&&!isInstallment&&!isMobile};
 }
 function rakutenCategory(store){
  if(/楽天モバイル|通信料/.test(store))return '固定費';
@@ -1901,8 +1905,8 @@ async function loadRakutenPdf(file){
    if(!month){const m=compact.match(/(20\d\d)年(\d{1,2})月ご請求金額/);if(m)month=m[1]+'-'+String(m[2]).padStart(2,'0');}
    for(const line of lines){const row=rakutenParseLine(line);if(row)all.push(row);}
   }
-  if(!verified&&all.length===0)throw new Error('楽天カードの見出し・明細行を読み取れなかったよ。PDFの文字配置を確認してね');
-  if(!all.length)throw new Error('利用明細の行を読み取れなかったよ。PDFの文字配置が想定と違う可能性があるよ');
+  if(!verified&&all.length===0)throw new Error('PDFの文字を明細として認識できなかったよ。');
+  if(!all.length)throw new Error('明細の利用日・店名・金額を読み取れなかったよ。');
   // 同じ金額・日付の複数購入を区別するため、明細内の行番号を保持。
   all=all.map((r,idx)=>({...r,idx}));
   rakutenPdfRows=all;
