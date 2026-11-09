@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>すもも家計簿 Ver.10.54（口座・保育料・立替金）</title>
+<title>すもも家計簿 Ver.10.54.1（口座・保育料・立替金）</title>
 <style>
 :root{--pink:#e88ca8;--pink2:#f7dce5;--ink:#3d3438;--muted:#8b7d83;--bg:#fff8fa;--card:#fff;--line:#eadde2;--green:#79b89a;--blue:#8caed8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
@@ -27,7 +27,7 @@ h2{font-size:18px;margin:4px 0 12px} h3{font-size:15px;margin:4px 0 10px}
 </head>
 <body>
 <div class="app">
-  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.54（口座・保育料・立替金） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
+  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.54.1（口座・保育料・立替金） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
   <div class="card" style="margin:6px 0 12px;padding:12px"><div class="row" style="flex-wrap:wrap"><div><strong>🌷 家計簿モード</strong><div class="muted" style="font-size:12px">テストと本番の支出は別々に集計するよ</div></div><select id="accountMode" style="width:auto;min-width:150px" onchange="changeAccountMode(this.value)"><option value="test">🧪 テスト用</option><option value="live">💰 本番用</option></select></div><small id="modeHelp" class="muted"></small></div>
   <nav>
     <button class="tab active" data-page="home">ホーム</button>
@@ -177,8 +177,8 @@ h2{font-size:18px;margin:4px 0 12px} h3{font-size:15px;margin:4px 0 10px}
     </div>
     <div class="card"><h2>💳 旦那さんの立替金</h2><p class="muted" style="font-size:12px">家族カードなどで代わりに払った分を管理。返金は通常の収入に含めないよ。カード決済は銀行残高から即時には引かれないので、口座残高とは別管理だよ。</p>
       <div id="advanceSummary"></div><h3>立替を追加</h3><div class="formgrid"><div><label>立替日</label><input type="date" id="advanceDate"></div><div><label>内容</label><input id="advanceTitle" placeholder="例：旦那さんの買い物"></div><div><label>立替額（円）</label><input type="number" id="advanceAmount" min="1" step="1"></div><div><label>支払い方法</label><select id="advancePayment"><option>楽天カード（家族カード）</option><option>楽天カード（自分用）</option><option>Oliveデビット</option><option>その他</option></select></div></div>
-      <div class="actions"><button class="btn" onclick="registerAdvance()">立替を登録</button></div>
-      <h3 style="margin-top:18px">返金を登録（複数件まとめてOK）</h3><div id="advanceOutstanding" class="list"></div>
+      <div class="actions"><button class="btn" onclick="registerAdvance()">立替を登録</button></div><p id="advanceNotice" role="status" aria-live="polite" style="font-size:13px;font-weight:700;color:#39805a;margin:10px 0"></p>
+      <h3 id="refundHeading" style="margin-top:18px">返金を登録（複数件まとめてOK）</h3><p class="muted" style="font-size:12px">①上の「立替を登録」で保存 → ②ここに表示される立替の「今回の返金額」を入力 → ③返金日と口座を確認して「返金をまとめて登録」を押してね。</p><div id="advanceOutstanding" class="list"></div>
       <div class="formgrid" style="margin-top:12px"><div><label>返金日</label><input type="date" id="refundDate"></div><div><label>振込先口座</label><select id="refundBank"></select></div></div>
       <p class="muted" style="font-size:12px">各立替の「今回返してもらった額」を入力。合計が実際の振込額と一致するか確認してね。</p><div id="refundSum" style="font-weight:700">今回の返金合計 ¥0</div><div class="actions"><button class="btn" onclick="registerRefund()">返金をまとめて登録</button></div>
       <div id="advanceHistory" class="list"></div>
@@ -1735,7 +1735,7 @@ function registerSmartBatch(){
  if(added){persist();showTsvPurchase();renderSmartBatch();tsvStatus(`${added}件の買い物を登録できたよ！重複は除外したよ 🩷`)}
 }
 
-// --- Ver.10.54: 銀行・保育料・立替 ---
+// --- Ver.10.54.1: 銀行・保育料・立替 ---
 const bankNames=['三井住友銀行','SBIドコモ銀行','鹿児島銀行','楽天銀行'];
 function finance(){return data.financeModes[currentMode()]}
 function uid(){return (typeof crypto!=='undefined'&&crypto.randomUUID)?crypto.randomUUID():String(Date.now())+'_'+Math.random().toString(36).slice(2)}
@@ -1764,7 +1764,7 @@ function renderFinance(){
  document.getElementById('childHistory').innerHTML='<h3>保育料の登録履歴</h3>'+([...f.childcare].sort((a,b)=>b.month.localeCompare(a.month)).map(c=>`<div class="item"><div><strong>${c.person==='older'?'👧 上の子':'👶 下の子'} ${c.month}　${yen(c.amount)}</strong><br><small>${c.date} · ${c.bank} ／ 保育料 ${yen(c.fee)}${c.lunch!==null?'・給食費 '+yen(c.lunch):'・給食費未定'}</small></div><button class="btn danger" onclick="deleteFinance('childcare','${c.id}')">削除</button></div>`).join('')||'<p class="muted">まだ登録されていないよ</p>');
  const due=f.advances.reduce((s,a)=>s+a.amount-refunded(a.id),0),total=f.advances.reduce((s,a)=>s+a.amount,0);
  document.getElementById('advanceSummary').innerHTML=`<div class="grid" style="grid-template-columns:repeat(2,1fr);margin-bottom:12px"><div class="stat"><div class="label">立替累計</div><div class="money">${yen(total)}</div></div><div class="stat"><div class="label">未返金</div><div class="money">${yen(due)}</div></div></div>`;
- document.getElementById('advanceOutstanding').innerHTML=f.advances.filter(a=>a.amount>refunded(a.id)).map(a=>`<div class="item" style="display:block"><div class="row"><strong>${esc(a.title)} ／ 残り ${yen(a.amount-refunded(a.id))}</strong><small>${a.date}</small></div><label style="margin-top:8px">今回の返金額（円）</label><input class="refundInput" data-id="${a.id}" type="number" min="0" max="${a.amount-refunded(a.id)}" step="1" value="0" oninput="updateRefundSum()"></div>`).join('')||'<p class="muted">未返金の立替はないよ 🩷</p>';
+ document.getElementById('advanceOutstanding').innerHTML=f.advances.filter(a=>a.amount>refunded(a.id)).map(a=>`<div class="item" style="display:block"><div class="row"><strong>${esc(a.title)} ／ 残り ${yen(a.amount-refunded(a.id))}</strong><small>${a.date}</small></div><label style="margin-top:8px">今回の返金額（円）</label><input class="refundInput" data-id="${a.id}" type="number" min="0" max="${a.amount-refunded(a.id)}" step="1" value="0" oninput="updateRefundSum()"></div>`).join('')||'<p class="muted">未返金の立替はないよ。上の「立替を登録」で追加すると、ここに返金額の入力欄が出るよ 🩷</p>';
  document.getElementById('advanceHistory').innerHTML='<h3>立替・返金履歴</h3>'+([...f.advances].reverse().map(a=>`<div class="item"><div><strong>${esc(a.title)} ${yen(a.amount)}</strong><br><small>${a.date} · ${esc(a.payment)} · ${refunded(a.id)>=a.amount?'返金済み':refunded(a.id)>0?'一部返金':'未返金'}（返金 ${yen(refunded(a.id))}）</small></div><button class="btn danger" onclick="deleteFinance('advances','${a.id}')">削除</button></div>`).join('')||'<p class="muted">まだ立替はないよ</p>')+([...f.refunds].reverse().slice(0,10).map(r=>`<div class="item"><div><strong>返金 ${yen(r.amount)}</strong><br><small>${r.date} → ${r.bank}</small></div><button class="btn danger" onclick="deleteFinance('refunds','${r.id}')">削除</button></div>`).join(''));
  updateRefundSum();
 }
@@ -1780,9 +1780,9 @@ function registerChildcare(){const f=finance(),month=document.getElementById('ch
  if(!confirm(`${person==='older'?'上の子':'下の子'} ${month}分 ${yen(amount)} を${date}に${bank}で支払ったことを確認した？`))return;
  const id=uid();f.childcare.push({id,month,person,fee,lunch,amount,date,bank});data.expenses.push({id:uid(),accountMode:currentMode(),sourceKey:'childcare:'+id,date,amount,store:person==='older'?'保育料・上の子':'保育料・下の子',category:'固定費',subcategory:'保育料',payment:'楽天銀行・請求書払い',note:`${month}分・保育料 ${yen(fee)}・給食費 ${lunch===null?'未定':yen(lunch)}`});persist();}
 function refunded(id){return finance().refunds.reduce((s,r)=>s+(r.items||[]).filter(i=>i.advanceId===id).reduce((n,i)=>n+i.amount,0),0)}
-function registerAdvance(){const date=document.getElementById('advanceDate').value,title=document.getElementById('advanceTitle').value.trim(),value=document.getElementById('advanceAmount').value,payment=document.getElementById('advancePayment').value;if(!date||!title||!validYen(value)){alert('立替日・内容・金額を入力してね');return}finance().advances.push({id:uid(),date,title,amount:Number(value),payment});document.getElementById('advanceTitle').value='';document.getElementById('advanceAmount').value='';persist()}
+function registerAdvance(){const date=document.getElementById('advanceDate').value,title=document.getElementById('advanceTitle').value.trim(),value=document.getElementById('advanceAmount').value,payment=document.getElementById('advancePayment').value;if(!date||!title||!validYen(value)){alert('立替日・内容・金額を入力してね');return}finance().advances.push({id:uid(),date,title,amount:Number(value),payment});document.getElementById('advanceTitle').value='';document.getElementById('advanceAmount').value='';persist();document.getElementById('advanceNotice').textContent='✅ 立替を登録したよ！ 下の「返金を登録」に金額入力欄が追加されたよ。';document.getElementById('refundHeading').scrollIntoView({behavior:'smooth',block:'start'});}
 function updateRefundSum(){const el=document.getElementById('refundSum');if(el)el.textContent='今回の返金合計 '+yen([...document.querySelectorAll('.refundInput')].reduce((s,x)=>s+(Number(x.value)||0),0))}
-function registerRefund(){const f=finance(),date=document.getElementById('refundDate').value,bank=document.getElementById('refundBank').value,items=[];for(const x of document.querySelectorAll('.refundInput')){if(!validYen(x.value,true)){alert('返金額を0以上の整数で入力してね');return}const amount=Number(x.value);const a=f.advances.find(a=>a.id===x.dataset.id);if(!a||amount>a.amount-refunded(a.id)){alert('返金額が未返金額を超えているよ');return}if(amount)items.push({advanceId:a.id,amount})}const amount=items.reduce((s,x)=>s+x.amount,0);if(!date||!amount){alert('返金額を入力してね');return}if(!confirm(`${date} ${bank}への返金 ${yen(amount)} を確認した？`))return;f.refunds.push({id:uid(),date,bank,amount,items});persist()}
+function registerRefund(){const f=finance(),date=document.getElementById('refundDate').value,bank=document.getElementById('refundBank').value,items=[];for(const x of document.querySelectorAll('.refundInput')){if(!validYen(x.value,true)){alert('返金額を0以上の整数で入力してね');return}const amount=Number(x.value);const a=f.advances.find(a=>a.id===x.dataset.id);if(!a||amount>a.amount-refunded(a.id)){alert('返金額が未返金額を超えているよ');return}if(amount)items.push({advanceId:a.id,amount})}const amount=items.reduce((s,x)=>s+x.amount,0);if(!date||!amount){alert('返金額を入力してね');return}if(!confirm(`${date} ${bank}への返金 ${yen(amount)} を確認した？`))return;f.refunds.push({id:uid(),date,bank,amount,items});persist();document.getElementById('advanceNotice').textContent='✅ '+yen(amount)+' の返金を登録したよ！ 返金履歴に反映されたよ。';document.getElementById('advanceHistory').scrollIntoView({behavior:'smooth',block:'start'});}
 function deleteFinance(type,id){const f=finance(),item=f[type].find(x=>x.id===id);if(!item)return;if(type==='advances'&&f.refunds.some(r=>r.items.some(i=>i.advanceId===id))){alert('先に紐づく返金記録を削除してね');return}if(!confirm('この記録を削除する？ 元に戻せないよ'))return;f[type]=f[type].filter(x=>x.id!==id);if(type==='childcare')data.expenses=data.expenses.filter(e=>e.sourceKey!=='childcare:'+id);if(type==='transfers')data.expenses=data.expenses.filter(e=>e.sourceKey!=='transferfee:'+id);if(type==='childcare')document.getElementById('childPerson').dataset.loadedKey='';persist()}
 clearForm();applyTheme();persist();
 </script>
