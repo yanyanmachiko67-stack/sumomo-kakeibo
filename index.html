@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>すもも家計簿 Ver.10.54.2（口座・保育料・立替金）</title>
+<title>すもも家計簿 Ver.10.54.3（口座・保育料・立替金）</title>
 <style>
 :root{--pink:#e88ca8;--pink2:#f7dce5;--ink:#3d3438;--muted:#8b7d83;--bg:#fff8fa;--card:#fff;--line:#eadde2;--green:#79b89a;--blue:#8caed8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
@@ -22,12 +22,18 @@ h2{font-size:18px;margin:4px 0 12px} h3{font-size:15px;margin:4px 0 10px}
 .list{display:grid;gap:8px}#recent{margin-top:16px}.item{display:flex;align-items:center;justify-content:space-between;border:1px solid var(--line);border-radius:14px;padding:12px;background:#fff}.item small{color:var(--muted)}.amount{font-weight:800}.cat{font-size:11px;padding:4px 8px;border-radius:999px;background:var(--pink2);margin-left:7px}
 .budget{display:grid;gap:10px}.budgetrow{border:1px solid var(--line);padding:12px;border-radius:14px}
 .empty{padding:25px;text-align:center;color:var(--muted)}
+/* iPhone Safari: month/date inputs can retain an intrinsic width that overflows cards. */
+.app,.card,.formgrid,.formgrid>div{min-width:0;max-width:100%}
+.card{overflow-wrap:anywhere}
+input[type="month"],input[type="date"]{display:block;box-sizing:border-box;width:100%;min-width:0;max-width:100%;-webkit-appearance:none;appearance:none;min-height:44px}
+input[type="month"]::-webkit-date-and-time-value,input[type="date"]::-webkit-date-and-time-value{min-width:0;text-align:center}
+input[type="month"]::-webkit-datetime-edit,input[type="date"]::-webkit-datetime-edit{min-width:0;max-width:100%}
 @media(max-width:760px){.grid{grid-template-columns:repeat(2,1fr)}.formgrid{grid-template-columns:1fr}.money{font-size:20px}#expensePieWrap{grid-template-columns:1fr!important}.item{min-width:0}#recent .item{flex-wrap:wrap;gap:8px}#recent .item>div:last-child{flex-wrap:wrap}}
 </style>
 </head>
 <body>
 <div class="app">
-  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.54.2（口座・保育料・立替金） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
+  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.54.3（口座・保育料・立替金） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
   <div class="card" style="margin:6px 0 12px;padding:12px"><div class="row" style="flex-wrap:wrap"><div><strong>🌷 家計簿モード</strong><div class="muted" style="font-size:12px">テストと本番の支出は別々に集計するよ</div></div><select id="accountMode" style="width:auto;min-width:150px" onchange="changeAccountMode(this.value)"><option value="test">🧪 テスト用</option><option value="live">💰 本番用</option></select></div><small id="modeHelp" class="muted"></small></div>
   <nav>
     <button class="tab active" data-page="home">ホーム</button>
@@ -321,7 +327,7 @@ function normalizeData(d){
    const b=result.modeBudgets[mode]||{};
    result.modeBudgets[mode]={income:Number(b.income)||0,saving:Number(b.saving)||0,categoryBudgets:b.categoryBudgets&&typeof b.categoryBudgets==='object'?b.categoryBudgets:{}};
  }
-  // Ver.10.54.2: 新しい口座・保育料・立替データをモード別に初期化。
+  // Ver.10.54.3: 新しい口座・保育料・立替データをモード別に初期化。
   // 既存の登録内容がある場合は維持する。
   if(!result.financeModes || typeof result.financeModes!=='object' || Array.isArray(result.financeModes)) result.financeModes={};
   for(const mode of ['test','live']){
@@ -1750,7 +1756,7 @@ function registerSmartBatch(){
  if(added){persist();showTsvPurchase();renderSmartBatch();tsvStatus(`${added}件の買い物を登録できたよ！重複は除外したよ 🩷`)}
 }
 
-// --- Ver.10.54.2: 銀行・保育料・立替 ---
+// --- Ver.10.54.3: 銀行・保育料・立替 ---
 const bankNames=['三井住友銀行','SBIドコモ銀行','鹿児島銀行','楽天銀行'];
 function finance(){return data.financeModes[currentMode()]}
 function uid(){return (typeof crypto!=='undefined'&&crypto.randomUUID)?crypto.randomUUID():String(Date.now())+'_'+Math.random().toString(36).slice(2)}
