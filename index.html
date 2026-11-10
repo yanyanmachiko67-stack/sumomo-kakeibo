@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>すもも家計簿 Ver.10.55.3（楽天PDF読み取り改善）</title>
+<title>すもも家計簿 Ver.10.55.4（楽天PDF実明細対応）</title>
 <style>
 :root{--pink:#e88ca8;--pink2:#f7dce5;--ink:#3d3438;--muted:#8b7d83;--bg:#fff8fa;--card:#fff;--line:#eadde2;--green:#79b89a;--blue:#8caed8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
@@ -33,7 +33,7 @@ input[type="month"]::-webkit-datetime-edit,input[type="date"]::-webkit-datetime-
 </head>
 <body>
 <div class="app">
-  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.55.3（楽天PDF読み取り改善） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
+  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.55.4（楽天PDF実明細対応） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
   <div class="card" style="margin:6px 0 12px;padding:12px"><div class="row" style="flex-wrap:wrap"><div><strong>🌷 家計簿モード</strong><div class="muted" style="font-size:12px">テストと本番の支出は別々に集計するよ</div></div><select id="accountMode" style="width:auto;min-width:150px" onchange="changeAccountMode(this.value)"><option value="test">🧪 テスト用</option><option value="live">💰 本番用</option></select></div><small id="modeHelp" class="muted"></small></div>
   <nav>
     <button class="tab active" data-page="home">ホーム</button>
@@ -1845,44 +1845,54 @@ function rakutenPdfLibrary(){
 function rakutenPdfLines(items){
  const lines=[];
  for(const t of items){
-  const str=String(t.str||'').trim();if(!str)continue;
+  const str=String(t.str||'').trim();if(!str||!t.transform)continue;
   const x=t.transform[4],y=t.transform[5];
-  let line=lines.find(l=>Math.abs(l.y-y)<2.5);
+  let line=lines.find(l=>Math.abs(l.y-y)<3.5);
   if(!line){line={y,parts:[]};lines.push(line);}
   line.parts.push({x,str});
  }
  return lines.sort((a,b)=>b.y-a.y).map(l=>({...l,parts:l.parts.sort((a,b)=>a.x-b.x)}));
 }
 function rakutenParseLine(line){
- // PDFの座標に依存せず、日付・支払区分・金額の順序で解析する。
- const text=line.parts.map(p=>p.str).join(' ').replace(/[\u00a0\u3000]/g,' ').replace(/\s+/g,' ').trim();
- const match=text.match(/(?:^|\s)(20\d{2})\s*\/\s*(\d{1,2})\s*\/\s*(\d{1,2})\s+(.+)/);
- if(!match)return null;
- const date=`${match[1]}-${match[2].padStart(2,'0')}-${match[3].padStart(2,'0')}`;
- const rest=match[4];
- // 「本人*」「家族*」などの直前までが利用先。
- const who=rest.match(/\s+(?:本人|家族)(?:\s*\*)?\s*/);
- if(!who)return null;
- const store=rest.slice(0,who.index).trim();
- const tail=rest.slice(who.index+who[0].length).trim();
- const payMatch=tail.match(/^(.*?(?:1\s*回払い|分割\s*\d+\s*回払い(?:\s*\([^)]*\))?|\d+\s*回払い|リボ払い|ボーナス(?:一括|2回)?払い))(?:\s+|$)/);
- if(!payMatch||!store)return null;
- const pay=payMatch[1].replace(/\s+/g,' ').trim();
- const amountText=tail.slice(payMatch[0].length).trim();
- const numbers=(amountText.match(/-?\d[\d,]*/g)||[]).map(x=>x.replace(/,/g,''));
+ // 楽天カード公式PDFの表は日付・店舗・利用者・支払方法・金額が独立した列。
+ // PDF.jsで日本語が分割されても、列のX座標で復元する。
+ const parts=line.parts||[];
+ const text=parts.map(p=>p.str).join(' ').replace(/[\u00a0\u3000]/g,' ').replace(/\s+/g,' ').trim();
+ const dateMatch=text.match(/(?:^|\s)(20\d{2})\s*\/\s*(\d{1,2})\s*\/\s*(\d{1,2})(?:\s|$)/);
+ if(!dateMatch)return null;
+ const date=`${dateMatch[1]}-${dateMatch[2].padStart(2,'0')}-${dateMatch[3].padStart(2,'0')}`;
+ const byX=(min,max)=>parts.filter(p=>p.x>=min&&p.x<max).map(p=>p.str).join(' ').replace(/\s+/g,' ').trim();
+ let store=byX(59,207).replace(/\s+(?:本人|家族)\s*\*?$/,'').trim();
+ let pay=byX(207,280).replace(/\s+/g,'');
+ let amountText=byX(280,327);
+ let billText=byX(465,525);
+ // 列の配置が異なるPDFに対しては文字列による従来の解析も試す。
+ if(!store||!/(?:回払い|分割|リボ|ボーナス)/.test(pay)){
+  const rest=text.slice(dateMatch.index+dateMatch[0].length).trim();
+  const who=rest.match(/\s+(?:本\s*人|家\s*族)\s*\*?\s*/);
+  if(!who)return null;
+  store=rest.slice(0,who.index).trim();
+  const tail=rest.slice(who.index+who[0].length).trim();
+  const m=tail.match(/^(.*?(?:1\s*回払い|分割\s*\d+\s*回払い(?:\s*\([^)]*\))?|\d+\s*回払い|リボ払い|ボーナス(?:一括|2回)?払い))(?:\s+|$)/);
+  if(!m)return null;
+  pay=m[1].replace(/\s+/g,'');
+  const nums=(tail.slice(m[0].length).match(/-?\d[\d,]*/g)||[]);
+  amountText=nums[0]||'';
+  billText=nums.length>=5?nums[4]:'';
+ }
+ const number=t=>{const m=String(t).replace(/\s/g,'').match(/^-?[\d,]+$/);return m?Number(m[0].replace(/,/g,'')):NaN;};
  const isInstallment=/分割|リボ|ボーナス/.test(pay);
- // 通常払いは最初の金額。分割は請求額が末尾にある場合のみ使用。
- const amount=Number(isInstallment?(numbers.length>=4?numbers[numbers.length-1]:''):numbers[0]);
+ // 分割の利用金額欄は「-」の場合がある。当月請求額列を優先。
+ const amount=isInstallment?number(billText):number(amountText);
  if(!Number.isSafeInteger(amount)||amount<=0)return null;
- const isCharge=/楽天ペイ残高.*(?:オート)?チャージ/.test(store);
+ const isCharge=/楽天ペイ残高.*(?:オート)?チャージ/.test(store.replace(/\s/g,''));
  const isMobile=/楽天モバイル通信料/.test(store);
  return {date,store,amount,pay,isInstallment,isCharge,isMobile,category:rakutenCategory(store),selected:!isCharge&&!isInstallment&&!isMobile};
 }
 function rakutenParseTextFallback(items){
- // PDFによっては1行が異なるY座標に分割されるため、文字列も試す。
  const raw=items.map(t=>String(t.str||'')).filter(Boolean).join(' ').replace(/[\u00a0\u3000]/g,' ');
  const chunks=raw.split(/(?=20\d{2}\s*\/\s*\d{1,2}\s*\/\s*\d{1,2}\s+)/);
- return chunks.map(chunk=>rakutenParseLine({parts:[{str:chunk}]})).filter(Boolean);
+ return chunks.map(chunk=>rakutenParseLine({parts:[{x:0,str:chunk}]})).filter(Boolean);
 }
 function rakutenCategory(store){
  if(/楽天モバイル|通信料/.test(store))return '固定費';
@@ -1920,7 +1930,7 @@ async function loadRakutenPdf(file){
    // 座標分割のため行解析が全滅した場合のみ文字列解析を試す。
    all.push(...(pageRows.length?pageRows:rakutenParseTextFallback(textItems)));
   }
-  if(!verified&&all.length===0)throw new Error('PDFの文字を明細として認識できなかったよ。');
+  if(!verified&&all.length===0)throw new Error('PDFの文字を明細として認識できなかったよ（列解析も失敗）。');
   if(!all.length)throw new Error('明細の利用日・店名・金額を読み取れなかったよ。');
   // 同じ金額・日付の複数購入を区別するため、明細内の行番号を保持。
   all=all.map((r,idx)=>({...r,idx}));
