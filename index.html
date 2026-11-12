@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>すもも家計簿 Ver.10.55.8（楽天PDF実明細対応）</title>
+<title>すもも家計簿 Ver.10.55.9（楽天PDF実明細対応）</title>
 <style>
 :root{--pink:#e88ca8;--pink2:#f7dce5;--ink:#3d3438;--muted:#8b7d83;--bg:#fff8fa;--card:#fff;--line:#eadde2;--green:#79b89a;--blue:#8caed8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
@@ -33,7 +33,7 @@ input[type="month"]::-webkit-datetime-edit,input[type="date"]::-webkit-datetime-
 </head>
 <body>
 <div class="app">
-  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.55.8（楽天PDF実明細対応） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
+  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.55.9（楽天PDF実明細対応） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
   <div class="card" style="margin:6px 0 12px;padding:12px"><div class="row" style="flex-wrap:wrap"><div><strong>🌷 家計簿モード</strong><div class="muted" style="font-size:12px">テストと本番の支出は別々に集計するよ</div></div><select id="accountMode" style="width:auto;min-width:150px" onchange="changeAccountMode(this.value)"><option value="test">🧪 テスト用</option><option value="live">💰 本番用</option></select></div><small id="modeHelp" class="muted"></small></div>
   <nav>
     <button class="tab active" data-page="home">ホーム</button>
@@ -1895,9 +1895,17 @@ function rakutenParseTextFallback(items){
  const chunks=raw.split(/(?=20\d{2}\s*\/\s*\d{1,2}\s*\/\s*\d{1,2}\s+)/);
  return chunks.map(chunk=>rakutenParseLine({parts:[{x:0,str:chunk}]})).filter(Boolean);
 }
+function rakutenRepairLeadingDate(raw){
+ // iPhone PDF copy may drop the first digit of the very first transaction date.
+ // Only repair a date at the start of a line/text, and only when a valid year results.
+ return String(raw||'').replace(/(^|\n)([0-9]{3})(\s*\/\s*\d{1,2}\s*\/\s*\d{1,2})(?=\s)/g,(whole,prefix,year,rest)=>{
+  const fixed='2'+year;
+  return Number(fixed)>=2000&&Number(fixed)<=2099?prefix+fixed+rest:whole;
+ });
+}
 function rakutenParsePlainText(raw){
  // PDF.js と iPhone のコピー文字列の両方に対応。明細先頭行も必ず候補に含める。
- const normalized=String(raw||'').replace(/[\u00a0\u3000]/g,' ').replace(/[‐‑‒–—−－]/g,'-');
+ const normalized=rakutenRepairLeadingDate(raw).replace(/[\u00a0\u3000]/g,' ').replace(/[‐‑‒–—−－]/g,'-');
  const chunks=normalized.split(/(?=20\d{2}\s*\/\s*\d{1,2}\s*\/\s*\d{1,2}(?!\d))/);
  const rows=[];
  for(const chunk of chunks){
@@ -1977,14 +1985,14 @@ async function loadRakutenPdf(file){
   const pdfjs=await rakutenPdfLibrary();
   const bytes=await file.arrayBuffer();
   const digest=await crypto.subtle.digest('SHA-256',bytes);
-  const pdf=await pdfjs.getDocument({data:new Uint8Array(bytes)}).promise;
+  const pdf=await pdfjs.getDocument({data:new Uint8Array(bytes),disableFontFace:true, useSystemFonts:true, disableRange:true, disableStream:true}).promise;
   if(pdf.numPages>15)throw new Error('15ページ以内の明細で試してね');
   let all=[];let month='';let verified=false;
   for(let i=1;i<=pdf.numPages;i++){
    const page=await pdf.getPage(i);
-   const textItems=(await page.getTextContent()).items;
+   const textItems=(await page.getTextContent({disableCombineTextItems:false,includeMarkedContent:false})).items;
    const lines=rakutenPdfLines(textItems);
-   const joined=lines.map(l=>l.parts.map(p=>p.str).join(' ')).join('\n');
+   const joined=rakutenRepairLeadingDate(lines.map(l=>l.parts.map(p=>p.str).join(' ')).join('\n'));
    // PDF.js may split Japanese glyphs into individual text items.
    const compact=joined.replace(/[\s\u3000]/g,'');
    if((/ご利用代金請求明細書/.test(compact)||/ご利用明細/.test(compact))&&/楽天(?:PINK)?カード|楽天カード株式会社/.test(compact))verified=true;
@@ -1993,12 +2001,13 @@ async function loadRakutenPdf(file){
    // 座標分割のため行解析が全滅した場合のみ文字列解析を試す。
    const fallback=rakutenParsePlainText(joined);
    const originalFallback=rakutenParseTextFallback(textItems);
+   const rawFallback=rakutenParsePlainText(textItems.map(t=>t.str||'').join(' '));
    // 異なる抽出方法を統合し、先頭のAmazonなどの取りこぼしを補う。
-   const candidates=[pageRows,fallback,originalFallback];
+   const candidates=[pageRows,fallback,originalFallback,rawFallback];
    const merged=rakutenMergeCandidates(candidates);
    all.push(...merged);
   }
-  if(!verified&&all.length===0)throw new Error('PDFの文字を明細として認識できなかったよ。下の「コピーした文字を貼り付ける」方法を試してね。');
+  if(!verified&&all.length===0)throw new Error('PDFの文字を明細として認識できなかったよ。PDF内の文字抽出に失敗している可能性があるよ。');
   if(!all.length)throw new Error('PDF内の明細を読み取れなかったよ。下の「コピーした文字を貼り付ける」方法を試してね。');
   // 同じ金額・日付の複数購入を区別するため、明細内の行番号を保持。
   all=all.map((r,idx)=>({...r,idx}));
@@ -2011,7 +2020,7 @@ async function loadRakutenPdf(file){
   document.getElementById('rakutenPdfMonth').value=month;
   review.style.display='block';renderRakutenPdf();
   rakutenStatus(`${all.length}件の明細を読み取ったよ（合計 ${yen(all.reduce((n,r)=>n+r.amount,0))}）。金額・分類・重複を確認してから登録してね。`);
- }catch(e){rakutenStatus('読み込みできなかったよ：'+e.message);}
+ }catch(e){rakutenStatus('読み込みできなかったよ：'+e.message+'（PDF直接読み込みのエラー）');}
 }
 function rakutenSelectAll(checked){rakutenPdfRows.forEach(r=>{if(!rakutenSimilar(r)&&!r.isCharge&&!r.isInstallment&&!r.isMobile)r.selected=checked;});renderRakutenPdf();}
 function rakutenRowSelect(idx,checked){const r=rakutenPdfRows[idx];if(r&&!rakutenSimilar(r)){r.selected=checked;renderRakutenPdf();}}
