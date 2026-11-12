@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>すもも家計簿 Ver.10.55.11（楽天PDF実明細対応）</title>
+<title>すもも家計簿 Ver.10.55.12（楽天PDF実明細対応）</title>
 <style>
 :root{--pink:#e88ca8;--pink2:#f7dce5;--ink:#3d3438;--muted:#8b7d83;--bg:#fff8fa;--card:#fff;--line:#eadde2;--green:#79b89a;--blue:#8caed8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
@@ -33,7 +33,7 @@ input[type="month"]::-webkit-datetime-edit,input[type="date"]::-webkit-datetime-
 </head>
 <body>
 <div class="app">
-  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.55.11（楽天PDF実明細対応） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
+  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.55.12（楽天PDF実明細対応） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
   <div class="card" style="margin:6px 0 12px;padding:12px"><div class="row" style="flex-wrap:wrap"><div><strong>🌷 家計簿モード</strong><div class="muted" style="font-size:12px">テストと本番の支出は別々に集計するよ</div></div><select id="accountMode" style="width:auto;min-width:150px" onchange="changeAccountMode(this.value)"><option value="test">🧪 テスト用</option><option value="live">💰 本番用</option></select></div><small id="modeHelp" class="muted"></small></div>
   <nav>
     <button class="tab active" data-page="home">ホーム</button>
@@ -2037,14 +2037,16 @@ async function loadRakutenPdf(file){
  try{
   const pdfjs=await rakutenPdfLibrary();
   const bytes=await file.arrayBuffer();
+  // PDF.js transfers (detaches) its input ArrayBuffer to a worker.
+  // Keep the original untouched for SHA-256 and SVF fallback.
   const digest=await crypto.subtle.digest('SHA-256',bytes);
   let pdf;let openError='';
-  try{pdf=await pdfjs.getDocument({data:new Uint8Array(bytes),disableFontFace:true,useSystemFonts:true,disableRange:true,disableStream:true}).promise;}
+  try{pdf=await pdfjs.getDocument({data:new Uint8Array(bytes.slice(0)),disableFontFace:true,useSystemFonts:true,disableRange:true,disableStream:true}).promise;}
   catch(err){
    openError=String(err?.message||err);
    // iOS SafariでWorkerが失敗した場合、メインスレッドで再試行する。
    pdfjs.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-   pdf=await pdfjs.getDocument({data:new Uint8Array(bytes),disableFontFace:true,useSystemFonts:true,disableRange:true,disableStream:true,disableWorker:true}).promise;
+   pdf=await pdfjs.getDocument({data:new Uint8Array(bytes.slice(0)),disableFontFace:true,useSystemFonts:true,disableRange:true,disableStream:true,disableWorker:true}).promise;
   }
   let diag=`PDF: ${file.size} bytes / ${pdf.numPages}ページ\nPDF.js: ${pdfjs.version||'不明'}\n`+(openError?'初回エラー: '+openError+'\n':'');
   if(pdf.numPages>15)throw new Error('15ページ以内の明細で試してね');
