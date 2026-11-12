@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>すもも家計簿 Ver.10.55.12（楽天PDF実明細対応）</title>
+<title>すもも家計簿 Ver.10.55.13（楽天PDF実明細対応）</title>
 <style>
 :root{--pink:#e88ca8;--pink2:#f7dce5;--ink:#3d3438;--muted:#8b7d83;--bg:#fff8fa;--card:#fff;--line:#eadde2;--green:#79b89a;--blue:#8caed8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
@@ -33,7 +33,7 @@ input[type="month"]::-webkit-datetime-edit,input[type="date"]::-webkit-datetime-
 </head>
 <body>
 <div class="app">
-  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.55.12（楽天PDF実明細対応） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
+  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.55.13（楽天PDF実明細対応） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
   <div class="card" style="margin:6px 0 12px;padding:12px"><div class="row" style="flex-wrap:wrap"><div><strong>🌷 家計簿モード</strong><div class="muted" style="font-size:12px">テストと本番の支出は別々に集計するよ</div></div><select id="accountMode" style="width:auto;min-width:150px" onchange="changeAccountMode(this.value)"><option value="test">🧪 テスト用</option><option value="live">💰 本番用</option></select></div><small id="modeHelp" class="muted"></small></div>
   <nav>
     <button class="tab active" data-page="home">ホーム</button>
@@ -1980,7 +1980,7 @@ function rakutenSimilar(row){return modeExpenses().some(e=>e.sourceKey===rakuten
 // SVF発行の楽天PDFは ToUnicode を持たない 90ms-RKSJ-H フォントを使うことがある。
 // PDF.js が文字片0件を返した場合、PDFの文字描画命令をShift_JISとして復元する。
 async function rakutenExtractSvfPdf(bytes){
- const src=new Uint8Array(bytes), latin=new TextDecoder('latin1').decode(src);
+ const src=new Uint8Array(bytes), latin=Array.from(src,b=>String.fromCharCode(b)).join('');
  const decoder=new TextDecoder('shift_jis');
  const lines=[];let streamCount=0;
  const streamRe=/stream\r?\n/g;let m;
@@ -1995,7 +1995,7 @@ async function rakutenExtractSvfPdf(bytes){
   if(typeof DecompressionStream==='undefined')throw new Error('このSafariはPDFの圧縮展開に対応していないよ');
   let inflated;
   try{const ds=new DecompressionStream('deflate');inflated=new Uint8Array(await new Response(new Blob([payload]).stream().pipeThrough(ds)).arrayBuffer());}catch(e){continue;}
-  const content=new TextDecoder('latin1').decode(inflated);
+  const content=Array.from(inflated,b=>String.fromCharCode(b)).join('');
   if(!/\bBT\b/.test(content))continue;
   streamCount++;
   const blocks=content.match(/\bBT\b[\s\S]*?\bET\b/g)||[];
@@ -2023,10 +2023,37 @@ async function rakutenExtractSvfPdf(bytes){
  }
  // ページごとに描画順を保ち、同じY座標を1行にまとめる。
  const grouped=[];
- for(const t of lines){let l=grouped.find(z=>z.page===t.page&&Math.abs(z.y-t.y)<2);if(!l){l={y:t.y,page:t.page,parts:[]};grouped.push(l);}l.parts.push({x:t.x,str:t.str});}
+ for(const t of lines){let l=grouped.find(z=>z.page===t.page&&Math.abs(z.y-t.y)<6);if(!l){l={y:t.y,page:t.page,parts:[]};grouped.push(l);}l.parts.push({x:t.x,str:t.str});}
  const plain=grouped.sort((a,b)=>a.page-b.page||b.y-a.y).map(l=>l.parts.sort((a,b)=>a.x-b.x).map(p=>p.str).join(' ')).join('\n');
- return {plain,streamCount,parts:lines.length};
+ return {plain,grouped,streamCount,parts:lines.length};
 }
+
+// SVFの表は文字列の出現順ではなく列座標を基準に読む。
+// 楽天PDFは分割払いの支払方法だけY座標が約4ポイントずれることがある。
+function rakutenParseSvfColumns(grouped){
+ const result=[];
+ for(const line of grouped||[]){
+  const parts=(line.parts||[]).slice().sort((a,b)=>a.x-b.x);
+  const col=(min,max)=>parts.filter(p=>p.x>=min&&p.x<max).map(p=>p.str).join(' ').replace(/\s+/g,' ').trim();
+  const dateText=col(90,345);
+  const dm=dateText.match(/(20\d{2})\s*\/\s*(\d{1,2})\s*\/\s*(\d{1,2})/);
+  if(!dm)continue;
+  const date=`${dm[1]}-${dm[2].padStart(2,'0')}-${dm[3].padStart(2,'0')}`;
+  const store=col(345,975).trim();
+  const who=col(975,1170);
+  const pay=col(1170,1555).replace(/\s+/g,'').replace(/\\([()])/g,'$1');
+  if(!store||!/本人|家族/.test(who)||!/回払い|リボ払い|ボーナス/.test(pay))continue;
+  const number=(min,max)=>{const t=col(min,max).replace(/[,\s]/g,'');return /^\d+$/.test(t)?Number(t):NaN;};
+  const isInstallment=/分割|リボ|ボーナス|(?:[2-9]|[1-9]\d+)回払い/.test(pay);
+  const amount=isInstallment?number(2600,2900):number(1555,1840);
+  if(!Number.isSafeInteger(amount)||amount<=0)continue;
+  const isCharge=/楽天ペイ残高.*(?:オート)?チャージ/.test(store.replace(/\s/g,''));
+  const isMobile=/楽天モバイル通信料/.test(store);
+  result.push({date,store,amount,pay,isInstallment,isCharge,isMobile,category:rakutenCategory(store),selected:!isCharge&&!isInstallment&&!isMobile});
+ }
+ return result;
+}
+
 async function loadRakutenPdf(file){
  const review=document.getElementById('rakutenPdfReview');review.style.display='none';rakutenPdfRows=[];
  if(!file)return;
@@ -2075,8 +2102,10 @@ async function loadRakutenPdf(file){
   if(all.length===0){
    const svf=await rakutenExtractSvfPdf(bytes);
    diag+=`SVF文字復元: ${svf.streamCount}ストリーム / ${svf.parts}文字片\n`;
-   const recovered=rakutenParsePlainText(rakutenRepairLeadingDate(svf.plain));
-   diag+=`SVF明細解析: ${recovered.length}件\n`;
+   const columnRows=rakutenParseSvfColumns(svf.grouped);
+   const textRows=rakutenParsePlainText(rakutenRepairLeadingDate(svf.plain));
+   const recovered=columnRows.length?columnRows:textRows;
+   diag+=`SVF列解析: ${columnRows.length}件 / 文章解析: ${textRows.length}件 / 統合: ${recovered.length}件\n`;
    all.push(...recovered);
    if(!month){const mm=svf.plain.match(/(20\d{2})年\s*(\d{1,2})月ご請求金額/);if(mm)month=mm[1]+'-'+mm[2].padStart(2,'0');}
   }
