@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>すもも家計簿 Ver.10.55.14（二重登録確認対応）</title>
+<title>すもも家計簿 Ver.10.55.15（二重登録確認対応）</title>
 <style>
 :root{--pink:#e88ca8;--pink2:#f7dce5;--ink:#3d3438;--muted:#8b7d83;--bg:#fff8fa;--card:#fff;--line:#eadde2;--green:#79b89a;--blue:#8caed8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
@@ -33,7 +33,7 @@ input[type="month"]::-webkit-datetime-edit,input[type="date"]::-webkit-datetime-
 </head>
 <body>
 <div class="app">
-  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.55.14（二重登録確認対応） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
+  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.55.15（二重登録確認対応） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
   <div class="card" style="margin:6px 0 12px;padding:12px"><div class="row" style="flex-wrap:wrap"><div><strong>🌷 家計簿モード</strong><div class="muted" style="font-size:12px">テストと本番の支出は別々に集計するよ</div></div><select id="accountMode" style="width:auto;min-width:150px" onchange="changeAccountMode(this.value)"><option value="test">🧪 テスト用</option><option value="live">💰 本番用</option></select></div><small id="modeHelp" class="muted"></small></div>
   <nav>
     <button class="tab active" data-page="home">ホーム</button>
@@ -104,6 +104,20 @@ input[type="month"]::-webkit-datetime-edit,input[type="date"]::-webkit-datetime-
         </div>
       </div>
       <div class="actions"><button class="btn" id="expenseSaveBtn" onclick="saveExpense()">登録する</button><button class="btn secondary" onclick="clearForm()">クリア</button></div>
+    </div>
+    <div class="card" id="expenseHistoryCard">
+      <h2>🔎 支出履歴・重複チェック</h2>
+      <p class="muted" style="font-size:12px">テスト用・本番用は別々に表示。過去のレシートも探せるよ。重複候補は自動削除しないので確認してね。</p>
+      <div class="formgrid">
+        <div><label for="historyDate">日付（指定なしでもOK）</label><input id="historyDate" type="date" oninput="renderExpenseHistory()"></div>
+        <div><label for="historyStore">店名（部分一致）</label><input id="historyStore" placeholder="例：ダイレックス" oninput="renderExpenseHistory()"></div>
+        <div><label for="historyAmount">金額（円）</label><input id="historyAmount" type="number" min="0" placeholder="例：3587" oninput="renderExpenseHistory()"></div>
+        <div style="display:flex;align-items:end"><button type="button" class="btn secondary" style="width:100%" onclick="clearExpenseHistoryFilters()">検索条件をクリア</button></div>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;margin-top:12px;color:var(--ink)"><input type="checkbox" id="historyDuplicatesOnly" style="width:auto" onchange="renderExpenseHistory()"> 重複候補だけ表示</label>
+      <p id="historyCount" class="muted" style="font-size:12px" aria-live="polite"></p>
+      <div id="historyResults" class="list"></div>
+      <div class="actions"><button id="historyMore" class="btn secondary" style="display:none" onclick="historyLimit+=50;renderExpenseHistory()">さらに50件表示</button></div>
     </div>
     <div class="card" id="rakutenPdfImporter">
       <h2>💳 楽天カードPDF明細取り込み（確認式）</h2>
@@ -401,6 +415,35 @@ function duplicateDescription(e){return `${e.date} ${e.store||'支出'} ${yen(e.
 function similarExpenses(date,store,amount){return modeExpenses().filter(e=>e.date===date&&Number(e.amount)===Number(amount)&&String(e.store||'').trim()===String(store||'').trim());}
 function confirmPotentialDuplicate(date,store,amount){const n=similarExpenses(date,store,amount).length;return !n||confirm(`⚠️ 同じモードに、日付・店名・金額が同じ支出が${n}件あるよ。\n${date} ${store} ${yen(amount)}\n本当にもう一度登録する？`);}
 
+let historyLimit=50;
+function clearExpenseHistoryFilters(){
+ for(const id of ['historyDate','historyStore','historyAmount'])document.getElementById(id).value='';
+ document.getElementById('historyDuplicatesOnly').checked=false;historyLimit=50;renderExpenseHistory();
+}
+function historyDuplicateIds(){
+ const all=modeExpenses(),seen=new Map(),dups=new Set();
+ // 同日・同額・同じ店名のみを候補にする（別会計の可能性があるため削除しない）。
+ for(const e of all){
+  const key=[e.date,Number(e.amount),matchStoreName(e.store)].join('|');
+  if(!e.date||!Number(e.amount)||!matchStoreName(e.store))continue;
+  if(seen.has(key)){dups.add(seen.get(key));dups.add(e.id);}else seen.set(key,e.id);
+ }
+ return dups;
+}
+function renderExpenseHistory(){
+ const box=document.getElementById('historyResults');if(!box)return;
+ const date=document.getElementById('historyDate').value;
+ const store=matchStoreName(document.getElementById('historyStore').value);
+ const amount=document.getElementById('historyAmount').value;
+ const only=document.getElementById('historyDuplicatesOnly').checked;
+ const duplicates=historyDuplicateIds();
+ const list=modeExpenses().filter(e=>(!date||e.date===date)&&(!store||matchStoreName(e.store).includes(store))&&(amount===''||Number(e.amount)===Number(amount))&&(!only||duplicates.has(e.id))).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+ const shown=list.slice(0,historyLimit);
+ document.getElementById('historyCount').textContent=`該当 ${list.length}件 ／ このモードの重複候補 ${duplicates.size}件（候補は同じ日・店・金額で判定）`;
+ box.innerHTML=shown.length?shown.map(e=>`<div class="item" style="flex-wrap:wrap;gap:10px"><div style="min-width:0;flex:1"><strong>${esc(e.store||'支出')}</strong> ${duplicates.has(e.id)?'<span class="cat" style="background:#fff0cf;color:#8b5900">⚠️ 重複候補</span>':''}<br><small>${esc(e.date||'日付なし')} · ${esc(e.payment||'支払い不明')} · ${esc(e.category||'その他')}</small>${Array.isArray(e.splits)&&e.splits.length?'<br><small>'+e.splits.map(x=>esc(x.category)+' '+yen(x.amount)).join(' / ')+'</small>':''}${e.note?'<br><small>メモ：'+esc(e.note)+'</small>':''}</div><div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap"><strong>${yen(e.amount)}</strong><button type="button" class="btn secondary" style="padding:7px 10px;font-size:12px" onclick="editExpense('${e.id}')">編集</button><button type="button" class="btn danger" style="padding:7px 10px;font-size:12px" onclick="removeExpense('${e.id}')">削除</button></div></div>`).join(''):'<div class="empty">該当する支出はないよ</div>';
+ document.getElementById('historyMore').style.display=list.length>historyLimit?'inline-block':'none';
+}
+
 function expenseTotal(){return modeExpenses().filter(e=>inPeriod(e.date)).reduce((s,e)=>s+Number(e.amount),0)}
 function catTotal(c){return modeExpenses().filter(e=>inPeriod(e.date)).reduce((s,e)=>s+(Array.isArray(e.splits)&&e.splits.length?e.splits.filter(x=>x.category===c).reduce((a,x)=>a+Number(x.amount||0),0):(e.category===c?Number(e.amount):0)),0)}
 function applyTheme(){
@@ -434,7 +477,7 @@ function render(){
   const recent=[...modeExpenses()].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,8);
   document.getElementById('recent').innerHTML=recent.length?recent.map(e=>`<div class="item"><div><strong>${esc(e.store||'支出')}</strong><span class="cat">${Array.isArray(e.splits)&&e.splits.length?'カテゴリ分け':esc(e.category)}</span><br><small>${esc(e.date)} · ${esc(e.payment||'')}${e.subcategory?' · '+esc(e.subcategory):''}${e.who?' · '+esc(e.who):''}${e.paymentDetail?'（'+esc(e.paymentDetail)+'）':''}</small>${Array.isArray(e.splits)&&e.splits.length?'<br><small>'+e.splits.map(x=>esc(x.category)+' '+yen(x.amount)).join(' / ')+'</small>':''}</div><div style="display:flex;align-items:center;gap:10px"><div class="amount">${yen(e.amount)}</div><button class="btn secondary" style="padding:7px 10px;font-size:12px" onclick="editExpense('${e.id}')">編集</button><button class="btn danger" style="padding:7px 10px;font-size:12px" onclick="removeExpense('${e.id}')">削除</button></div></div>`).join(''):'<div class="empty">まだ支出がありません</div>';
   document.getElementById('income').value=modeBudget().income||0; document.getElementById('saving').value=modeBudget().saving||0;
-  renderCats(); renderPaymentMethods(); renderBudget(); renderPie(); renderSplitRows(); renderCarLoan(); renderFixedRules(); renderFixedCheck(); renderMobilePreview(); renderFinance();
+  renderCats(); renderPaymentMethods(); renderBudget(); renderPie(); renderSplitRows(); renderCarLoan(); renderFixedRules(); renderFixedCheck(); renderMobilePreview(); renderFinance(); renderExpenseHistory();
 }
 const subcategoryOptions={
  '食費':['食材','飲料','外食'], '日用品':['洗剤・消耗品','生活用品'],
