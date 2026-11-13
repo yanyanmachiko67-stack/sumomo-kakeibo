@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>すもも家計簿 Ver.10.55.18（PDF重複候補の自動チェック解除）</title>
+<title>すもも家計簿 Ver.10.55.19（PDF重複候補の自動チェック解除）</title>
 <style>
 :root{--pink:#e88ca8;--pink2:#f7dce5;--ink:#3d3438;--muted:#8b7d83;--bg:#fff8fa;--card:#fff;--line:#eadde2;--green:#79b89a;--blue:#8caed8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
@@ -33,7 +33,7 @@ input[type="month"]::-webkit-datetime-edit,input[type="date"]::-webkit-datetime-
 </head>
 <body>
 <div class="app">
-  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.55.18（PDF重複候補の自動チェック解除） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
+  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.55.19（PDF重複候補の自動チェック解除） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
   <div class="card" style="margin:6px 0 12px;padding:12px"><div class="row" style="flex-wrap:wrap"><div><strong>🌷 家計簿モード</strong><div class="muted" style="font-size:12px">テストと本番の支出は別々に集計するよ</div></div><select id="accountMode" style="width:auto;min-width:150px" onchange="changeAccountMode(this.value)"><option value="test">🧪 テスト用</option><option value="live">💰 本番用</option></select></div><small id="modeHelp" class="muted"></small></div>
   <nav>
     <button class="tab active" data-page="home">ホーム</button>
@@ -2076,7 +2076,17 @@ function rakutenCategory(store){
 function rakutenPdfKey(row){return 'rakutenpdf:'+rakutenPdfFingerprint+':'+row.idx;}
 function rakutenSimilar(row){return modeExpenses().some(e=>e.sourceKey===rakutenPdfKey(row));}
 function rakutenSimilarForRow(row,idx,fingerprint){return modeExpenses().some(e=>e.sourceKey==='rakutenpdf:'+fingerprint+':'+idx);}
-function rakutenPossibleDuplicate(row){return duplicateCandidates(row.date,row.store,row.amount).length>0;}
+function rakutenStoreAlias(s){
+ const raw=String(s||'').normalize('NFKC').toUpperCase().replace(/[\s　・･._\-ー]/g,'');
+ // カード明細のカタカナ表記・支店名と、レシートの漢字店名を照合する。
+ if(/西松屋|ニシマツヤ/.test(raw))return '西松屋';
+ return matchStoreName(s);
+}
+function rakutenPossibleDuplicate(row){
+ if(duplicateCandidates(row.date,row.store,row.amount).length>0)return true;
+ const alias=rakutenStoreAlias(row.store);
+ return modeExpenses().some(e=>Number(e.amount)===Number(row.amount)&&dayGap(e.date,row.date)<=2&&rakutenStoreAlias(e.store)===alias);
+}
 // SVF発行の楽天PDFは ToUnicode を持たない 90ms-RKSJ-H フォントを使うことがある。
 // PDF.js が文字片0件を返した場合、PDFの文字描画命令をShift_JISとして復元する。
 async function rakutenExtractSvfPdf(bytes){
