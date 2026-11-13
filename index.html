@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>すもも家計簿 Ver.10.55.16（1ヶ月の支出一覧対応）</title>
+<title>すもも家計簿 Ver.10.55.17（子ども費（他）追加）</title>
 <style>
 :root{--pink:#e88ca8;--pink2:#f7dce5;--ink:#3d3438;--muted:#8b7d83;--bg:#fff8fa;--card:#fff;--line:#eadde2;--green:#79b89a;--blue:#8caed8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
@@ -33,7 +33,7 @@ input[type="month"]::-webkit-datetime-edit,input[type="date"]::-webkit-datetime-
 </head>
 <body>
 <div class="app">
-  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.55.16（1ヶ月の支出一覧対応） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
+  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.55.17（子ども費（他）追加） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
   <div class="card" style="margin:6px 0 12px;padding:12px"><div class="row" style="flex-wrap:wrap"><div><strong>🌷 家計簿モード</strong><div class="muted" style="font-size:12px">テストと本番の支出は別々に集計するよ</div></div><select id="accountMode" style="width:auto;min-width:150px" onchange="changeAccountMode(this.value)"><option value="test">🧪 テスト用</option><option value="live">💰 本番用</option></select></div><small id="modeHelp" class="muted"></small></div>
   <nav>
     <button class="tab active" data-page="home">ホーム</button>
@@ -320,7 +320,7 @@ input[type="month"]::-webkit-datetime-edit,input[type="date"]::-webkit-datetime-
         <div><label>固定費名</label><input id="fixedName" maxlength="40" placeholder="例：奨学金"></div>
         <div><label>毎月の予定額（円）</label><input id="fixedAmount" type="number" min="0" placeholder="例：5000"></div>
         <div><label>毎月の予定日（1〜28日）</label><input id="fixedDay" type="number" min="1" max="28" value="27"></div>
-        <div><label>カテゴリ</label><select id="fixedCategory"><option value="固定費">固定費</option><option value="子ども費">子ども費</option><option value="ペット費">ペット費</option><option value="車関連費">車関連費</option><option value="酒代">酒代</option><option value="その他">その他</option></select></div>
+        <div><label>カテゴリ</label><select id="fixedCategory"><option value="固定費">固定費</option><option value="子ども費">子ども費</option><option value="子ども費（他）">子ども費（他）</option><option value="ペット費">ペット費</option><option value="車関連費">車関連費</option><option value="酒代">酒代</option><option value="その他">その他</option></select></div>
       </div>
       <div class="actions"><button class="btn secondary" onclick="addFixedRule()">＋ 毎月の予定を追加</button></div>
       <div id="fixedRulesList"></div>
@@ -340,7 +340,7 @@ input[type="month"]::-webkit-datetime-edit,input[type="date"]::-webkit-datetime-
 <script>
 const KEY='sumomo_kakeibo_v1';
 const baseCats=[
-  {name:'食費',budget:50000},{name:'日用品',budget:15000},{name:'固定費',budget:0},{name:'子ども費',budget:10000},{name:'ペット費',budget:0},{name:'車関連費',budget:0},{name:'ファッション・美容費',budget:0},{name:'特別費',budget:0},{name:'その他',budget:10000},{name:'酒代',budget:0}
+  {name:'食費',budget:50000},{name:'日用品',budget:15000},{name:'固定費',budget:0},{name:'子ども費',budget:10000},{name:'子ども費（他）',budget:0},{name:'ペット費',budget:0},{name:'車関連費',budget:0},{name:'ファッション・美容費',budget:0},{name:'特別費',budget:0},{name:'その他',budget:10000},{name:'酒代',budget:0}
 ];
 const defaultMethods=[{name:'楽天カード',type:'credit'},{name:'Oliveデビット',type:'debit'},{name:'楽天ペイ',type:'qr'},{name:'PayPay',type:'qr'},{name:'現金',type:'cash'}];
 const defaultData={income:0,saving:20000,categories:baseCats,expenses:[],paymentMethods:defaultMethods,carLoan:{enabled:false,normal:20500,bonus:70500,day:26},receiptCategoryRules:{},accountMode:"test",modeMigrationDone:false,budgetModeMigrationDone:false,modeBudgets:null,fixedRules:[],financeModes:null};
@@ -515,6 +515,7 @@ const subcategoryOptions={
  '食費':['食材','飲料','外食'], '日用品':['洗剤・消耗品','生活用品'],
  '固定費':['住居','通信','保育料','奨学金','その他'],
  '子ども費':['おむつ・育児用品','おもちゃ','園用品','その他'],
+ '子ども費（他）':['その他'],
  'ペット費':['フード','トイレ用品','病院','その他'],
  '車関連費':['ローン','ガソリン','車検・整備','自動車税','駐車場・洗車','その他'],
  'ファッション・美容費':['洋服・下着','靴・バッグ・小物','化粧品・スキンケア','美容院・ネイル','その他'],
