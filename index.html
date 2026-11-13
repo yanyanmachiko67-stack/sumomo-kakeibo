@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>すもも家計簿 Ver.10.55.17（子ども費（他）追加）</title>
+<title>すもも家計簿 Ver.10.55.18（PDF重複候補の自動チェック解除）</title>
 <style>
 :root{--pink:#e88ca8;--pink2:#f7dce5;--ink:#3d3438;--muted:#8b7d83;--bg:#fff8fa;--card:#fff;--line:#eadde2;--green:#79b89a;--blue:#8caed8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
@@ -33,7 +33,7 @@ input[type="month"]::-webkit-datetime-edit,input[type="date"]::-webkit-datetime-
 </head>
 <body>
 <div class="app">
-  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.55.17（子ども費（他）追加） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
+  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.55.18（PDF重複候補の自動チェック解除） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
   <div class="card" style="margin:6px 0 12px;padding:12px"><div class="row" style="flex-wrap:wrap"><div><strong>🌷 家計簿モード</strong><div class="muted" style="font-size:12px">テストと本番の支出は別々に集計するよ</div></div><select id="accountMode" style="width:auto;min-width:150px" onchange="changeAccountMode(this.value)"><option value="test">🧪 テスト用</option><option value="live">💰 本番用</option></select></div><small id="modeHelp" class="muted"></small></div>
   <nav>
     <button class="tab active" data-page="home">ホーム</button>
@@ -2044,7 +2044,7 @@ function rakutenMergeCandidates(candidates){
 }
 function rakutenPrepareRows(all,month='',fingerprint='paste'){
  if(!all.length)throw new Error('明細を認識できなかったよ。日付から当月請求額までをコピーしてね。');
- rakutenPdfRows=all.map((r,idx)=>({...r,idx}));
+ rakutenPdfRows=all.map((r,idx)=>({...r,idx,selected:r.selected&&!rakutenPossibleDuplicate(r)&&!rakutenSimilarForRow(r,idx,fingerprint)}));
  rakutenPdfFingerprint=fingerprint;
  const payment=document.getElementById('rakutenPdfPayment');
  const names=[...new Set(['楽天カード（自分用）','楽天カード（家族カード）',...data.paymentMethods.filter(x=>x.type==='credit').map(x=>x.name)])];
@@ -2075,6 +2075,7 @@ function rakutenCategory(store){
 }
 function rakutenPdfKey(row){return 'rakutenpdf:'+rakutenPdfFingerprint+':'+row.idx;}
 function rakutenSimilar(row){return modeExpenses().some(e=>e.sourceKey===rakutenPdfKey(row));}
+function rakutenSimilarForRow(row,idx,fingerprint){return modeExpenses().some(e=>e.sourceKey==='rakutenpdf:'+fingerprint+':'+idx);}
 function rakutenPossibleDuplicate(row){return duplicateCandidates(row.date,row.store,row.amount).length>0;}
 // SVF発行の楽天PDFは ToUnicode を持たない 90ms-RKSJ-H フォントを使うことがある。
 // PDF.js が文字片0件を返した場合、PDFの文字描画命令をShift_JISとして復元する。
@@ -2216,6 +2217,7 @@ async function loadRakutenPdf(file){
   rakutenPdfRows=all;
   // 同じPDFを再度取り込んでも検出できる識別子。カード番号は含めない。
   rakutenPdfFingerprint=Array.from(new Uint8Array(digest)).slice(0,12).map(b=>b.toString(16).padStart(2,'0')).join('');
+  rakutenPdfRows.forEach(r=>{if(rakutenPossibleDuplicate(r)||rakutenSimilar(r))r.selected=false;});
   const payment=document.getElementById('rakutenPdfPayment');
   const names=[...new Set(['楽天カード（自分用）','楽天カード（家族カード）',...data.paymentMethods.filter(x=>x.type==='credit').map(x=>x.name)])];
   payment.innerHTML=names.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
@@ -2224,7 +2226,7 @@ async function loadRakutenPdf(file){
   rakutenStatus(`${all.length}件の明細を読み取ったよ（合計 ${yen(all.reduce((n,r)=>n+r.amount,0))}）。金額・分類・重複を確認してから登録してね。`);
  }catch(e){rakutenDiagnostic((document.getElementById('rakutenPdfDiagnostic').textContent||'')+'\nエラー: '+String(e?.name||'Error')+' / '+String(e?.message||e));rakutenStatus('読み込みできなかったよ：'+e.message+'。下の「PDF読み取り診断」を開くと詳しい原因を確認できるよ。');}
 }
-function rakutenSelectAll(checked){rakutenPdfRows.forEach(r=>{if(!rakutenSimilar(r)&&!r.isCharge&&!r.isInstallment&&!r.isMobile)r.selected=checked;});renderRakutenPdf();}
+function rakutenSelectAll(checked){rakutenPdfRows.forEach(r=>{if(!rakutenSimilar(r)&&!rakutenPossibleDuplicate(r)&&!r.isCharge&&!r.isInstallment&&!r.isMobile)r.selected=checked;});renderRakutenPdf();}
 function rakutenRowSelect(idx,checked){const r=rakutenPdfRows[idx];if(r&&!rakutenSimilar(r)){r.selected=checked;renderRakutenPdf();}}
 function rakutenRowCategory(idx,value){const r=rakutenPdfRows[idx];if(r)r.category=value;}
 function renderRakutenPdf(){
@@ -2232,7 +2234,7 @@ function renderRakutenPdf(){
  const categories=cats().map(c=>c.name);
  el.innerHTML=rakutenPdfRows.map((r,i)=>{
   const duplicate=rakutenSimilar(r),possible=!duplicate&&rakutenPossibleDuplicate(r);
-  const flag=r.isCharge?'⚠️ 楽天ペイへのチャージ（原則登録しない）':r.isInstallment?'⚠️ 分割払い：今回の請求額。購入時の支出との重複に注意':r.isMobile?'⚠️ 通信料：固定費と重複していないか確認':duplicate?'⛔ このPDF明細は登録済み':possible?'⚠️ 日付・店舗・金額が近い登録済み支出あり。別の買い物か確認してね':'';
+  const flag=r.isCharge?'⚠️ 楽天ペイへのチャージ（原則登録しない）':r.isInstallment?'⚠️ 分割払い：今回の請求額。購入時の支出との重複に注意':r.isMobile?'⚠️ 通信料：固定費と重複していないか確認':duplicate?'⛔ このPDF明細は登録済み':possible?'🧾 登録済み支出と一致候補：チェックを自動で外したよ。別の買い物なら手動で選べるよ':'';
   const opts=categories.map(c=>`<option value="${esc(c)}" ${c===r.category?'selected':''}>${esc(c)}</option>`).join('');
   return `<div class="card" style="margin:0;padding:12px;${duplicate?'opacity:.65;':''}"><label style="display:flex;gap:10px;align-items:flex-start;color:var(--ink);font-size:14px"><input type="checkbox" style="width:auto;flex-shrink:0;margin-top:4px" ${r.selected&&!duplicate?'checked':''} ${duplicate?'disabled':''} onchange="rakutenRowSelect(${i},this.checked)"><span style="flex:1;min-width:0"><strong>${esc(r.store)}</strong><br><small>${esc(r.date)} ・ ${esc(r.pay)}</small></span><strong>${yen(r.amount)}</strong></label>${flag?`<div style="color:#a35b35;font-size:12px;margin:7px 0">${flag}</div>`:''}<label style="margin-top:8px">カテゴリ</label><select onchange="rakutenRowCategory(${i},this.value)" ${duplicate?'disabled':''}>${opts}</select></div>`;
  }).join('');
