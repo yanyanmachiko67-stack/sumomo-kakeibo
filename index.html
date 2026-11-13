@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>すもも家計簿 Ver.10.55.21（固定費・チャージの二重計上確認）</title>
+<title>すもも家計簿 Ver.10.55.22（固定費・チャージの二重計上確認）</title>
 <style>
 :root{--pink:#e88ca8;--pink2:#f7dce5;--ink:#3d3438;--muted:#8b7d83;--bg:#fff8fa;--card:#fff;--line:#eadde2;--green:#79b89a;--blue:#8caed8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
@@ -33,7 +33,7 @@ input[type="month"]::-webkit-datetime-edit,input[type="date"]::-webkit-datetime-
 </head>
 <body>
 <div class="app">
-  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.55.21（固定費・チャージの二重計上確認） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
+  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.55.22（固定費・チャージの二重計上確認） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
   <div class="card" style="margin:6px 0 12px;padding:12px"><div class="row" style="flex-wrap:wrap"><div><strong>🌷 家計簿モード</strong><div class="muted" style="font-size:12px">テストと本番の支出は別々に集計するよ</div></div><select id="accountMode" style="width:auto;min-width:150px" onchange="changeAccountMode(this.value)"><option value="test">🧪 テスト用</option><option value="live">💰 本番用</option></select></div><small id="modeHelp" class="muted"></small></div>
   <nav>
     <button class="tab active" data-page="home">ホーム</button>
@@ -153,6 +153,9 @@ input[type="month"]::-webkit-datetime-edit,input[type="date"]::-webkit-datetime-
     <div class="card" id="rakutenPayImporter">
       <h2>📱 楽天ペイ履歴スクショ取り込み（確認式・テスト版）</h2>
       <p class="muted" style="font-size:13px">「コード払い」の履歴スクショを選んでね。「楽天ペイ残高」のチャージは支出にしないよ。画像を選ぶだけでは登録されないよ。</p>
+      <label for="rakutenPayHistoryType">履歴の種類（先に選んでね）</label>
+      <select id="rakutenPayHistoryType" onchange="rakutenPayTypeChanged()"><option value="">選択してください</option><option value="code">コード払い（お買い物）</option><option value="balance">楽天ペイ残高（チャージ履歴）</option></select>
+      <p class="muted" style="font-size:12px">「楽天ペイ残高」を選ぶと、OCRが店名を読み間違えても支出登録候補は作らないよ。チャージはこの画面で確認するだけで、家計簿の支出には加えないよ。</p>
       <input type="file" id="rakutenPayImage" accept="image/*" onchange="rakutenPayChooseImage(this.files[0])">
       <img id="rakutenPayPreview" alt="選択した楽天ペイ履歴スクショ" style="display:none;max-width:100%;max-height:360px;object-fit:contain;border-radius:12px;margin-top:10px">
       <div class="actions"><button class="btn secondary" type="button" onclick="rakutenPayOCR()">🔎 画像から文字を読み取る（通信が必要）</button></div>
@@ -164,6 +167,7 @@ input[type="month"]::-webkit-datetime-edit,input[type="date"]::-webkit-datetime-
 プラッセ食品館 大小路店 ¥4,447"></textarea>
       <div class="actions"><button class="btn secondary" type="button" onclick="rakutenPayParse()">🧾 文字から登録候補を作る</button><button class="btn secondary" type="button" onclick="rakutenPayAddRow()">＋ 手動で1件追加</button></div>
       <p id="rakutenPayStatus" class="muted" role="status" aria-live="polite">まずはスクショを選んでね。楽天ペイアプリの画面を直接読み取る機能ではないよ。</p>
+      <div id="rakutenPayChargeInfo" class="muted" style="display:none;padding:12px;border:1px solid #edc4d0;border-radius:12px;margin-top:10px"></div>
       <div id="rakutenPayReview" style="display:none">
         <p class="muted" style="font-size:12px">日付・店名・金額を必ず確認してね。同じ日・同じ店でも別会計なら別々に登録できるよ。重複候補は最初からチェックなし。自動削除はしないよ。</p>
         <div id="rakutenPayRows" class="list"></div>
@@ -2307,11 +2311,25 @@ function registerRakutenPdf(){
 }
 
 
-// Ver.10.55.21 楽天ペイ履歴スクショの任意OCRと確認式取り込み。
+// Ver.10.55.22 楽天ペイ履歴スクショの任意OCRと確認式取り込み。
 let rakutenPayRows=[],rakutenPayImageFile=null,rakutenPayImageUrl=null;
+function rakutenPayHistoryType(){return document.getElementById('rakutenPayHistoryType').value;}
+function rakutenPayTypeChanged(){
+ rakutenPayRows=[];rakutenPayRender();
+ document.getElementById('rakutenPayChargeInfo').style.display='none';
+ rakutenPayStatus(rakutenPayHistoryType()==='balance'?'チャージ履歴モードだよ。読み取っても支出には登録されないよ。':rakutenPayHistoryType()==='code'?'コード払いモードだよ。お買い物だけ登録候補にするよ。':'先に履歴の種類を選んでね。');
+}
+function rakutenPayChargeOnly(){
+ rakutenPayRows=[];rakutenPayRender();
+ const info=document.getElementById('rakutenPayChargeInfo');
+ info.style.display='block';
+ info.textContent='💳 楽天ペイ残高のチャージ履歴だよ。これはお金の移動なので支出登録の対象外だよ。金額は楽天ペイアプリの履歴で確認してね。';
+ rakutenPayStatus('チャージ履歴として確認したよ。支出候補は0件・登録はされていないよ。');
+}
 function rakutenPayStatus(message){document.getElementById('rakutenPayStatus').textContent=message;}
 function rakutenPayChooseImage(file){
  rakutenPayImageFile=file||null;
+ rakutenPayRows=[];rakutenPayRender();document.getElementById('rakutenPayChargeInfo').style.display='none';document.getElementById('rakutenPayText').value='';
  if(rakutenPayImageUrl)URL.revokeObjectURL(rakutenPayImageUrl);
  rakutenPayImageUrl=file?URL.createObjectURL(file):null;
  const preview=document.getElementById('rakutenPayPreview');preview.src=rakutenPayImageUrl||'';preview.style.display=file?'block':'none';
@@ -2338,13 +2356,17 @@ function rakutenPayNormalizeDate(raw){
  return dt.getFullYear()===y&&dt.getMonth()===mo-1&&dt.getDate()===d?`${y}-${pad(mo)}-${pad(d)}`:'';
 }
 function rakutenPayParse(){
+ const type=rakutenPayHistoryType();
+ if(!type){rakutenPayStatus('先に「コード払い」か「楽天ペイ残高」を選んでね。');return;}
+ if(type==='balance'){rakutenPayChargeOnly();return;}
+ document.getElementById('rakutenPayChargeInfo').style.display='none';
  const text=document.getElementById('rakutenPayText').value.replace(/，/g,',').replace(/￥/g,'¥');
  const lines=text.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
  const rows=[];let date='',skip=false;
  for(let i=0;i<lines.length;i++){
   const line=lines[i],foundDate=rakutenPayNormalizeDate(line);
   if(foundDate){date=foundDate;skip=false;}
-  if(/チャージ|残高キープ|楽天ペイ残高|利用ポイント|利用金額合計|全\s*\d+\s*件/.test(line)){if(/チャージ|残高キープ/.test(line))skip=true;continue;}
+  if(/チャージ|残高キープ|楽天ペイ残高|利用ポイント|利用金額合計|全\s*\d+\s*件|¥\s*\+/.test(line)){if(/チャージ|残高キープ/.test(line))skip=true;continue;}
   if(!date||skip)continue;
   // 金額が同じ行にある店舗名、または次行に金額があるケース。
   const m=line.match(/(?:¥\s*|\b)([\d,]{1,10})\s*円?\s*$/);
@@ -2361,7 +2383,7 @@ function rakutenPayParse(){
  rakutenPayRows=rows;rakutenPayRender();
  rakutenPayStatus(rows.length?`${rows.length}件の候補を見つけたよ。OCRの読み間違いやチャージ混入がないか確認してね。`:'自動で候補を見つけられなかったよ。「＋ 手動で1件追加」で入力してね。');
 }
-function rakutenPayAddRow(){rakutenPayRows.push({date:new Date().toLocaleDateString('sv-SE'),store:'',amount:0,category:'食費',selected:false});rakutenPayRender();}
+function rakutenPayAddRow(){if(rakutenPayHistoryType()!=='code'){rakutenPayStatus('手動追加は「コード払い」のお買い物だけだよ。先に種類を選んでね。');return;}rakutenPayRows.push({date:new Date().toLocaleDateString('sv-SE'),store:'',amount:0,category:'食費',selected:false});rakutenPayRender();}
 function rakutenPayDuplicate(row){
  if(!row.date||!row.store||!Number(row.amount))return false;
  const a=rakutenStoreAlias(row.store);
@@ -2385,6 +2407,7 @@ function rakutenPayRender(){
  document.getElementById('rakutenPayTotal').textContent=`登録候補：${selected.length}件 ／ 合計 ${yen(selected.reduce((n,r)=>n+Number(r.amount||0),0))}`;
 }
 function rakutenPayRegister(){
+ if(rakutenPayHistoryType()!=='code'){alert('チャージ履歴は支出登録できないよ。');return;}
  const selected=rakutenPayRows.filter(r=>r.selected);
  if(!selected.length){alert('登録する買い物を選んでね。');return;}
  if(selected.some(r=>!r.date||!r.store.trim()||!Number.isSafeInteger(Number(r.amount))||Number(r.amount)<=0||!cats().some(c=>c.name===r.category))){alert('日付・店名・金額・カテゴリを確認してね。');return;}
