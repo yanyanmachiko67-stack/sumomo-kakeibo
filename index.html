@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>すもも家計簿 Ver.10.55.15（二重登録確認対応）</title>
+<title>すもも家計簿 Ver.10.55.16（1ヶ月の支出一覧対応）</title>
 <style>
 :root{--pink:#e88ca8;--pink2:#f7dce5;--ink:#3d3438;--muted:#8b7d83;--bg:#fff8fa;--card:#fff;--line:#eadde2;--green:#79b89a;--blue:#8caed8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
@@ -33,7 +33,7 @@ input[type="month"]::-webkit-datetime-edit,input[type="date"]::-webkit-datetime-
 </head>
 <body>
 <div class="app">
-  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.55.15（二重登録確認対応） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
+  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.55.16（1ヶ月の支出一覧対応） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
   <div class="card" style="margin:6px 0 12px;padding:12px"><div class="row" style="flex-wrap:wrap"><div><strong>🌷 家計簿モード</strong><div class="muted" style="font-size:12px">テストと本番の支出は別々に集計するよ</div></div><select id="accountMode" style="width:auto;min-width:150px" onchange="changeAccountMode(this.value)"><option value="test">🧪 テスト用</option><option value="live">💰 本番用</option></select></div><small id="modeHelp" class="muted"></small></div>
   <nav>
     <button class="tab active" data-page="home">ホーム</button>
@@ -104,6 +104,18 @@ input[type="month"]::-webkit-datetime-edit,input[type="date"]::-webkit-datetime-
         </div>
       </div>
       <div class="actions"><button class="btn" id="expenseSaveBtn" onclick="saveExpense()">登録する</button><button class="btn secondary" onclick="clearForm()">クリア</button></div>
+    </div>
+    <div class="card" id="monthlyHistoryCard">
+      <h2>📅 1ヶ月の支出一覧</h2>
+      <p class="muted" style="font-size:12px">給料日27日〜翌26日の支出をすべて表示するよ。過去の記録は消えないから安心してね。テスト用・本番用は別々に表示するよ。</p>
+      <div class="row" style="gap:8px;flex-wrap:wrap;align-items:center;margin:12px 0">
+        <button class="btn secondary" type="button" onclick="moveMonthlyHistory(-1)">◀ 前月</button>
+        <strong id="monthlyHistoryPeriod" style="flex:1;text-align:center;min-width:150px"></strong>
+        <button class="btn secondary" type="button" onclick="moveMonthlyHistory(1)">翌月 ▶</button>
+      </div>
+      <div class="actions" style="margin-bottom:10px"><button class="btn secondary" type="button" onclick="resetMonthlyHistory()">今の期間に戻る</button></div>
+      <p id="monthlyHistorySummary" class="muted" style="font-size:13px" aria-live="polite"></p>
+      <div id="monthlyHistoryResults" class="list"></div>
     </div>
     <div class="card" id="expenseHistoryCard">
       <h2>🔎 支出履歴・重複チェック</h2>
@@ -444,6 +456,26 @@ function renderExpenseHistory(){
  document.getElementById('historyMore').style.display=list.length>historyLimit?'inline-block':'none';
 }
 
+// 支出履歴の閲覧月は集計対象月とは独立させる（ホームの今月集計は変えない）。
+let monthlyHistoryOffset=0;
+function moveMonthlyHistory(delta){monthlyHistoryOffset+=delta;renderMonthlyHistory();}
+function resetMonthlyHistory(){monthlyHistoryOffset=0;renderMonthlyHistory();}
+function renderMonthlyHistory(){
+ const label=document.getElementById('monthlyHistoryPeriod');
+ const listEl=document.getElementById('monthlyHistoryResults');
+ if(!label||!listEl)return;
+ const now=new Date();
+ const current=periodStartEnd(now).start;
+ const start=new Date(current.getFullYear(),current.getMonth()+monthlyHistoryOffset,27);
+ const end=new Date(start.getFullYear(),start.getMonth()+1,27);
+ const last=new Date(end.getFullYear(),end.getMonth(),26);
+ const fmt=d=>`${d.getFullYear()}/${pad(d.getMonth()+1)}/${pad(d.getDate())}`;
+ label.textContent=`${fmt(start)} 〜 ${fmt(last)}`;
+ const entries=modeExpenses().filter(e=>{const d=dateObj(e.date);return d>=start&&d<end}).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+ const total=entries.reduce((sum,e)=>sum+(Number(e.amount)||0),0);
+ document.getElementById('monthlyHistorySummary').textContent=`${entries.length}件 ／ 合計 ${yen(total)}（${currentMode()==='test'?'テスト用':'本番用'}）`;
+ listEl.innerHTML=entries.length?entries.map(e=>`<div class="item"><div style="min-width:0;flex:1"><strong>${esc(e.store||'支出')}</strong><span class="cat">${esc(e.category||'未分類')}</span><br><small>${esc(e.date||'')} · ${esc(e.payment||'')}</small>${e.note?'<br><small>メモ：'+esc(e.note)+'</small>':''}</div><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end"><strong class="amount">${yen(e.amount)}</strong><button class="btn secondary" style="padding:7px 10px;font-size:12px" onclick="editExpense('${e.id}')">編集</button><button class="btn danger" style="padding:7px 10px;font-size:12px" onclick="removeExpense('${e.id}')">削除</button></div></div>`).join(''):'<div class="empty">この期間の支出はまだないよ</div>';
+}
 function expenseTotal(){return modeExpenses().filter(e=>inPeriod(e.date)).reduce((s,e)=>s+Number(e.amount),0)}
 function catTotal(c){return modeExpenses().filter(e=>inPeriod(e.date)).reduce((s,e)=>s+(Array.isArray(e.splits)&&e.splits.length?e.splits.filter(x=>x.category===c).reduce((a,x)=>a+Number(x.amount||0),0):(e.category===c?Number(e.amount):0)),0)}
 function applyTheme(){
@@ -477,7 +509,7 @@ function render(){
   const recent=[...modeExpenses()].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,8);
   document.getElementById('recent').innerHTML=recent.length?recent.map(e=>`<div class="item"><div><strong>${esc(e.store||'支出')}</strong><span class="cat">${Array.isArray(e.splits)&&e.splits.length?'カテゴリ分け':esc(e.category)}</span><br><small>${esc(e.date)} · ${esc(e.payment||'')}${e.subcategory?' · '+esc(e.subcategory):''}${e.who?' · '+esc(e.who):''}${e.paymentDetail?'（'+esc(e.paymentDetail)+'）':''}</small>${Array.isArray(e.splits)&&e.splits.length?'<br><small>'+e.splits.map(x=>esc(x.category)+' '+yen(x.amount)).join(' / ')+'</small>':''}</div><div style="display:flex;align-items:center;gap:10px"><div class="amount">${yen(e.amount)}</div><button class="btn secondary" style="padding:7px 10px;font-size:12px" onclick="editExpense('${e.id}')">編集</button><button class="btn danger" style="padding:7px 10px;font-size:12px" onclick="removeExpense('${e.id}')">削除</button></div></div>`).join(''):'<div class="empty">まだ支出がありません</div>';
   document.getElementById('income').value=modeBudget().income||0; document.getElementById('saving').value=modeBudget().saving||0;
-  renderCats(); renderPaymentMethods(); renderBudget(); renderPie(); renderSplitRows(); renderCarLoan(); renderFixedRules(); renderFixedCheck(); renderMobilePreview(); renderFinance(); renderExpenseHistory();
+  renderCats(); renderPaymentMethods(); renderBudget(); renderPie(); renderSplitRows(); renderCarLoan(); renderFixedRules(); renderFixedCheck(); renderMobilePreview(); renderFinance(); renderExpenseHistory(); renderMonthlyHistory();
 }
 const subcategoryOptions={
  '食費':['食材','飲料','外食'], '日用品':['洗剤・消耗品','生活用品'],
