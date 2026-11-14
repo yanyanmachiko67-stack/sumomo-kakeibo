@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>すもも家計簿 Ver.10.55.22（固定費・チャージの二重計上確認）</title>
+<title>すもも家計簿 Ver.10.55.23（楽天ペイコード払いOCR改善）</title>
 <style>
 :root{--pink:#e88ca8;--pink2:#f7dce5;--ink:#3d3438;--muted:#8b7d83;--bg:#fff8fa;--card:#fff;--line:#eadde2;--green:#79b89a;--blue:#8caed8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
@@ -33,7 +33,7 @@ input[type="month"]::-webkit-datetime-edit,input[type="date"]::-webkit-datetime-
 </head>
 <body>
 <div class="app">
-  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.55.22（固定費・チャージの二重計上確認） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
+  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.55.23（楽天ペイコード払いOCR改善） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
   <div class="card" style="margin:6px 0 12px;padding:12px"><div class="row" style="flex-wrap:wrap"><div><strong>🌷 家計簿モード</strong><div class="muted" style="font-size:12px">テストと本番の支出は別々に集計するよ</div></div><select id="accountMode" style="width:auto;min-width:150px" onchange="changeAccountMode(this.value)"><option value="test">🧪 テスト用</option><option value="live">💰 本番用</option></select></div><small id="modeHelp" class="muted"></small></div>
   <nav>
     <button class="tab active" data-page="home">ホーム</button>
@@ -2311,7 +2311,7 @@ function registerRakutenPdf(){
 }
 
 
-// Ver.10.55.22 楽天ペイ履歴スクショの任意OCRと確認式取り込み。
+// Ver.10.55.23 楽天ペイ履歴スクショの任意OCRと確認式取り込み。
 let rakutenPayRows=[],rakutenPayImageFile=null,rakutenPayImageUrl=null;
 function rakutenPayHistoryType(){return document.getElementById('rakutenPayHistoryType').value;}
 function rakutenPayTypeChanged(){
@@ -2360,24 +2360,28 @@ function rakutenPayParse(){
  if(!type){rakutenPayStatus('先に「コード払い」か「楽天ペイ残高」を選んでね。');return;}
  if(type==='balance'){rakutenPayChargeOnly();return;}
  document.getElementById('rakutenPayChargeInfo').style.display='none';
- const text=document.getElementById('rakutenPayText').value.replace(/，/g,',').replace(/￥/g,'¥');
- const lines=text.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+ const raw=document.getElementById('rakutenPayText').value.normalize('NFKC').replace(/￥/g,'¥');
+ const lines=raw.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
  const rows=[];let date='',skip=false;
  for(let i=0;i<lines.length;i++){
   const line=lines[i],foundDate=rakutenPayNormalizeDate(line);
   if(foundDate){date=foundDate;skip=false;}
-  if(/チャージ|残高キープ|楽天ペイ残高|利用ポイント|利用金額合計|全\s*\d+\s*件|¥\s*\+/.test(line)){if(/チャージ|残高キープ/.test(line))skip=true;continue;}
+  if(/チャージ|残高キープ|楽天ペイ残高|利用ポイント|利用金額合計|全\s*\d+\s*件|¥\s*\+/.test(line)){
+   if(/チャージ|残高キープ/.test(line))skip=true;
+   continue;
+  }
   if(!date||skip)continue;
-  // 金額が同じ行にある店舗名、または次行に金額があるケース。
-  const m=line.match(/(?:¥\s*|\b)([\d,]{1,10})\s*円?\s*$/);
+  // 楽天ペイOCRでは「店名 ¥548 >」のように末尾に詳細画面の矢印が付く。
+  // 日付は前行にある場合と同じ行にある場合の両方を許容する。
+  const cleaned=line.replace(/[\s>＞›→]+$/g,'').trim();
+  const m=cleaned.match(/(?:¥\s*|\s+)([\d,]{1,10})\s*円?$/);
   if(!m)continue;
   const amount=Number(m[1].replace(/,/g,''));
   if(!Number.isSafeInteger(amount)||amount<=0||amount>10000000)continue;
-  let store=line.slice(0,m.index).replace(/^[\s・:：-]+|[\s・:：-]+$/g,'').trim();
-  if(!store&&i>0&&!rakutenPayNormalizeDate(lines[i-1]))store=lines[i-1];
-  store=store.replace(/^20\d{2}[\/\-.年]\d{1,2}[\/\-.月]\d{1,2}[^\s]*\s*/,'').trim();
+  let store=cleaned.slice(0,m.index).trim();
+  store=store.replace(/^(?:20\d{2}[\/\-.年]\s*\d{1,2}[\/\-.月]\s*\d{1,2}日?(?:\s*\([^)]*\))?)\s*/,'').trim();
+  if(!store&&i>0&&!rakutenPayNormalizeDate(lines[i-1]))store=lines[i-1].trim();
   if(!store||/^(利用金額合計|ポイント|合計|コード払い|履歴|チャージ)/.test(store))continue;
-  
   rows.push({date,store,amount,category:'食費',selected:!duplicateCandidates(date,store,amount).length});
  }
  rakutenPayRows=rows;rakutenPayRender();
