@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>すもも家計簿 Ver.10.56.0（車ローン自動登録・祝日対応）</title>
+<title>すもも家計簿 Ver.10.56.1（自動登録ボタン表示修正）</title>
 <style>
 :root{--pink:#e88ca8;--pink2:#f7dce5;--ink:#3d3438;--muted:#8b7d83;--bg:#fff8fa;--card:#fff;--line:#eadde2;--green:#79b89a;--blue:#8caed8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
@@ -33,7 +33,7 @@ input[type="month"]::-webkit-datetime-edit,input[type="date"]::-webkit-datetime-
 </head>
 <body>
 <div class="app">
-  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.56.0（車ローン自動登録・祝日対応） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
+  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.56.1（自動登録ボタン表示修正） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
   <div class="card" style="margin:6px 0 12px;padding:12px"><div class="row" style="flex-wrap:wrap"><div><strong>🌷 家計簿モード</strong><div class="muted" style="font-size:12px">テストと本番の支出は別々に集計するよ</div></div><select id="accountMode" style="width:auto;min-width:150px" onchange="changeAccountMode(this.value)"><option value="test">🧪 テスト用</option><option value="live">💰 本番用</option></select></div><small id="modeHelp" class="muted"></small></div>
   <nav>
     <button class="tab active" data-page="home">ホーム</button>
@@ -316,6 +316,8 @@ input[type="month"]::-webkit-datetime-edit,input[type="date"]::-webkit-datetime-
         <div><label>原則引落日</label><input id="carDay" type="number" min="1" max="28" value="26"></div>
       </div>
       <div class="actions"><button class="btn secondary" onclick="saveCarLoan()">車ローン設定を保存</button></div>
+       <div class="actions"><button class="btn secondary" id="carAutoToggle" type="button" onclick="toggleCarAuto()">自動登録をONにする</button></div>
+       <p id="carAutoStatus" class="muted" style="font-size:12px" aria-live="polite">自動登録の設定を確認中</p>
       <div id="carLoanSchedule" style="margin-top:12px"></div>
       <div class="card" style="margin-top:12px;padding:12px">
         <strong>🧪 固定費の月別テスト・確認登録</strong>
