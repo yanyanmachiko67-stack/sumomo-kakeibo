@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>すもも家計簿 Ver.10.57.0（在庫管理追加）</title>
+<title>すもも家計簿 Ver.10.57.1（買い足し設定・保存場所改善）</title>
 <style>
 :root{--pink:#e88ca8;--pink2:#f7dce5;--ink:#3d3438;--muted:#8b7d83;--bg:#fff8fa;--card:#fff;--line:#eadde2;--green:#79b89a;--blue:#8caed8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
@@ -33,7 +33,7 @@ input[type="month"]::-webkit-datetime-edit,input[type="date"]::-webkit-datetime-
 </head>
 <body>
 <div class="app">
-  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.57.0（在庫管理追加） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
+  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.57.1（買い足し設定・保存場所改善） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
   <div class="card" style="margin:6px 0 12px;padding:12px"><div class="row" style="flex-wrap:wrap"><div><strong>🌷 家計簿モード</strong><div class="muted" style="font-size:12px">テストと本番の支出は別々に集計するよ</div></div><select id="accountMode" style="width:auto;min-width:150px" onchange="changeAccountMode(this.value)"><option value="test">🧪 テスト用</option><option value="live">💰 本番用</option></select></div><small id="modeHelp" class="muted"></small></div>
   <nav>
     <button class="tab active" data-page="home">ホーム</button>
@@ -279,11 +279,11 @@ input[type="month"]::-webkit-datetime-edit,input[type="date"]::-webkit-datetime-
 
 
   <section id="inventory" class="page">
-    <div class="card"><h2>🏠 すもも家の在庫管理</h2><p class="muted">レシートの購入品を在庫に追加。使い切ったら「－」で減らしてね。食材・日用品とも残り1個以下で買い物リストへ。期限管理なし。</p>
+    <div class="card"><h2>🏠 すもも家の在庫管理</h2><p class="muted">レシートの購入品を在庫に追加。使い切ったら「－」で減らしてね。指定した商品だけ残り1個以下で買い物リストへ。期限管理なし。</p>
       <div class="formgrid"><div><label>商品名</label><input id="invName" placeholder="例：牛乳"></div><div><label>数量</label><input id="invQty" type="number" min="1" step="1" value="1"></div><div><label>単位</label><select id="invUnit"><option>個</option><option>本</option><option>袋</option><option>パック</option><option>箱</option><option>玉</option><option>枚</option></select></div><div><label>保存場所</label><select id="invPlace"><option>冷蔵庫</option><option>冷凍庫</option><option>常温・食品庫</option><option>日用品収納</option><option>トイレ・洗面</option><option>その他</option></select></div></div>
       <div class="actions"><button class="btn" onclick="inventoryManualAdd()">＋ 在庫に追加</button></div>
       <p class="muted" style="font-size:12px">レシートの取込時は購入品を追加するか確認するよ。最初に家にあるものはここから追加してね。</p></div>
-    <div class="card"><h2>🛒 買い物リスト</h2><p class="muted">残り1以下の商品を自動表示。商品ごとの買い足し基準は変更できるよ。</p><div id="invShopping"></div></div>
+    <div class="card"><h2>🛒 買い物リスト</h2><p class="muted">自動追加ONの商品だけ表示。初期設定はOFF、買い足し基準は残り1個以下だよ。</p><div id="invShopping"></div></div>
     <div class="card"><h2>📦 現在の在庫</h2><div class="formgrid"><div><label>保存場所で絞り込み</label><select id="invFilter" onchange="renderInventory()"><option value="">すべて</option><option>冷蔵庫</option><option>冷凍庫</option><option>常温・食品庫</option><option>日用品収納</option><option>トイレ・洗面</option><option>その他</option></select></div><div><label>商品名検索</label><input id="invSearch" oninput="renderInventory()" placeholder="商品名を検索"></div></div><div id="invItems"></div></div>
     <div class="card"><h2>🧾 レシートから在庫に追加</h2><p class="muted">通常のレシートは支出登録後、スマートレシートTSVは購入登録時に在庫追加を確認するよ。数量が不明な商品は1個として扱うため、必ず確認してね。レシートの支出登録と在庫登録は別々に管理されるよ。</p></div>
   </section>
@@ -662,21 +662,24 @@ function updateSplitSum(){
 }
 document.getElementById('fAmount').addEventListener('input',updateSplitSum);
 
-// Inventory v10.57.0: mode-isolated; included in normal JSON backup.
+// Inventory v10.57.1: mode-isolated; included in normal JSON backup.
 function invData(){return data.inventoryModes[currentMode()]}
 function invCleanName(name){return String(name||'').trim().replace(/\s+/g,' ')}
 function invGuessPlace(name,category){
- const n=String(name||'');if(/洗剤|柔軟剤|シャンプー|リンス|石鹸|おむつ|オムツ|ラップ|スポンジ/.test(n)||category==='日用品')return '日用品収納';
- if(/トイレット|歯磨|ティッシュ/.test(n))return 'トイレ・洗面';
- if(/冷凍|アイス/.test(n))return '冷凍庫';
- if(/牛乳|乳飲料|ヨーグルト|卵|たまご|豆腐|納豆|チーズ|ハム|ベーコン/.test(n))return '冷蔵庫';
- return '常温・食品庫';
+ const n=String(name||'').normalize('NFKC').replace(/\s/g,'');
+ if(/トイレット|歯磨|ティッシュ|ハンドソープ/.test(n))return 'トイレ・洗面';
+ if(/洗剤|柔軟剤|シャンプー|リンス|石鹸|おむつ|オムツ|ラップ|スポンジ/.test(n)||category==='日用品')return '日用品収納';
+ if(/冷凍|アイスクリーム|冷食/.test(n))return '冷凍庫';
+ if(/牛乳|ミルク|乳飲料|ヨーグルト|卵|たまご|豆腐|納豆|チーズ|ハム|ベーコン|レタス|キャベツ|白菜|小松菜|ほうれん草|きゅうり|キュウリ|トマト|もやし|ブロッコリー|きのこ|しめじ|えのき|牛モモ|牛もも|牛肉|豚肉|鶏肉|若鶏|鶏もも|鶏むね|ひき肉|挽肉|ステーキ|小間切|こま切|刺身|鮭|サーモン|生魚/.test(n))return '冷蔵庫';
+ if(/パン|米|乾麺|缶詰|玉ねぎ|たまねぎ|じゃがいも|ウイス|ウィス|ビール|焼酎|醤油|砂糖|塩/.test(n))return '常温・食品庫';
+ return 'その他';
 }
+function invNeeds(x){return x.autoShop===true&&x.qty<=x.min;}
 function invAdd(name,qty,category,place,unit){
  name=invCleanName(name);qty=Math.max(0,Math.floor(Number(qty)||0));if(!name||!qty)return;
  const inv=invData(),found=inv.items.find(x=>x.name===name);
  if(found){found.qty+=qty;return}
- inv.items.push({id:'inv_'+Date.now()+'_'+Math.random().toString(36).slice(2),name,qty,place:place||invGuessPlace(name,category),unit:unit||'個',min:1});
+ inv.items.push({id:'inv_'+Date.now()+'_'+Math.random().toString(36).slice(2),name,qty,place:place||invGuessPlace(name,category),unit:unit||'個',min:1,autoShop:false});
 }
 function inventoryManualAdd(){
  const name=document.getElementById('invName').value.trim(),qty=Number(document.getElementById('invQty').value);
@@ -684,21 +687,21 @@ function inventoryManualAdd(){
  invAdd(name,qty,'',document.getElementById('invPlace').value,document.getElementById('invUnit').value);persist();document.getElementById('invName').value='';
 }
 function invAdjust(id,delta){const x=invData().items.find(x=>x.id===id);if(!x)return;x.qty=Math.max(0,x.qty+delta);persist()}
-function invEdit(id,field,value){const x=invData().items.find(x=>x.id===id);if(!x)return;if(field==='min')x.min=Math.max(0,Math.floor(Number(value)||0));else if(field==='place')x.place=value;else if(field==='unit')x.unit=value;persist()}
+function invEdit(id,field,value){const x=invData().items.find(x=>x.id===id);if(!x)return;if(field==='min')x.min=Math.max(0,Math.floor(Number(value)||0));else if(field==='autoShop')x.autoShop=value===true;else if(field==='place')x.place=value;else if(field==='unit')x.unit=value;persist()}
 function invDelete(id){if(!confirm('この商品を在庫一覧から削除する？'))return;invData().items=invData().items.filter(x=>x.id!==id);persist()}
 function renderInventory(){
  const list=document.getElementById('invItems'),shop=document.getElementById('invShopping');if(!list||!shop)return;
- const all=invData().items,needed=all.filter(x=>x.qty<=x.min);
+ const all=invData().items,needed=all.filter(invNeeds);
  shop.innerHTML=needed.length?needed.map(x=>`<div class="item"><div><strong>${esc(x.name)}</strong><br><small>残り ${x.qty}${esc(x.unit)} ／ ${esc(x.place)}</small></div><span class="cat">買い足し</span></div>`).join(''):'<div class="empty">今は買い足し候補がないよ 🌷</div>';
  const filter=document.getElementById('invFilter').value,q=document.getElementById('invSearch').value.trim().toLowerCase();
  const filtered=all.filter(x=>(!filter||x.place===filter)&&(!q||x.name.toLowerCase().includes(q)));
- list.innerHTML=filtered.length?filtered.map(x=>`<div class="item" style="display:block"><div class="row"><div><strong>${esc(x.name)}</strong><br><small>${esc(x.place)} ／ ${x.qty<=x.min?'🛒 買い足し候補':'在庫あり'}</small></div><div class="actions"><button class="btn secondary" onclick="invAdjust('${x.id}',-1)">－</button><strong>${x.qty}${esc(x.unit)}</strong><button class="btn secondary" onclick="invAdjust('${x.id}',1)">＋</button></div></div><div class="formgrid" style="margin-top:8px"><div><label>買い足し基準（残り何個以下）</label><input type="number" min="0" step="1" value="${x.min}" onchange="invEdit('${x.id}','min',this.value)"></div><div><label>保存場所</label><select onchange="invEdit('${x.id}','place',this.value)">${['冷蔵庫','冷凍庫','常温・食品庫','日用品収納','トイレ・洗面','その他'].map(p=>`<option ${x.place===p?'selected':''}>${p}</option>`).join('')}</select></div></div><div class="actions"><button class="btn secondary" onclick="invDelete('${x.id}')">一覧から削除</button></div></div>`).join(''):'<div class="empty">表示する在庫はまだないよ 🌷</div>';
+ list.innerHTML=filtered.length?filtered.map(x=>`<div class="item" style="display:block"><div class="row"><div><strong>${esc(x.name)}</strong><br><small>${esc(x.place)} ／ ${invNeeds(x)?'🛒 買い足し候補':(x.qty>0?'在庫あり':'在庫なし')}</small></div><div class="actions" style="display:flex;flex-wrap:nowrap;align-items:center;gap:5px;flex-shrink:0"><button class="btn secondary" onclick="invAdjust('${x.id}',-1)">－</button><strong>${x.qty}${esc(x.unit)}</strong><button class="btn secondary" onclick="invAdjust('${x.id}',1)">＋</button></div></div><div class="formgrid" style="margin-top:8px"><div><label>買い物リストへの自動追加</label><select onchange="invEdit('${x.id}','autoShop',this.value==='on')"><option value="off" ${x.autoShop!==true?'selected':''}>OFF（追加しない）</option><option value="on" ${x.autoShop===true?'selected':''}>ON（自動追加）</option></select></div><div><label>買い足し基準（残り何個以下）</label><input type="number" min="0" step="1" value="${x.min}" onchange="invEdit('${x.id}','min',this.value)"></div><div><label>保存場所</label><select onchange="invEdit('${x.id}','place',this.value)">${['冷蔵庫','冷凍庫','常温・食品庫','日用品収納','トイレ・洗面','その他'].map(p=>`<option ${x.place===p?'selected':''}>${p}</option>`).join('')}</select></div></div><div class="actions"><button class="btn secondary" onclick="invDelete('${x.id}')">一覧から削除</button></div></div>`).join(''):'<div class="empty">表示する在庫はまだないよ 🌷</div>';
 }
 function invImportLines(lines,key){
  const inv=invData();if(inv.imports.includes(key))return;
  const good=(lines||[]).filter(x=>invCleanName(x.name)&&!(/合計|小計|消費税|値引|ポイント|お釣|釣銭|支払/.test(x.name)));
  if(!good.length)return;
- if(!confirm(`${good.length}商品を在庫に追加する？\n※商品名・数量・保存場所は在庫画面で修正できるよ。\n※数量が分からないものは1個として登録するよ。\nキャンセルすると支出だけ登録するよ。`))return;
+ if(!confirm(`${good.length}商品を在庫に追加する？\n※数量・保存場所は在庫画面で修正できるよ。\n※数量が分からないものは1個として登録するよ。\nキャンセルすると支出だけ登録するよ。`))return;
  for(const x of good)invAdd(x.name,Number.isInteger(Number(x.qty))&&Number(x.qty)>0?Number(x.qty):1,x.category);
  inv.imports.push(key);persist();
 }
