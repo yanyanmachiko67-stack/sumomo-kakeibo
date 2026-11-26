@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>すもも家計簿 Ver.10.57.1（買い足し設定・保存場所改善）</title>
+<title>すもも家計簿 Ver.10.57.2（商品名の変更・統合）</title>
 <style>
 :root{--pink:#e88ca8;--pink2:#f7dce5;--ink:#3d3438;--muted:#8b7d83;--bg:#fff8fa;--card:#fff;--line:#eadde2;--green:#79b89a;--blue:#8caed8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
@@ -33,7 +33,7 @@ input[type="month"]::-webkit-datetime-edit,input[type="date"]::-webkit-datetime-
 </head>
 <body>
 <div class="app">
-  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.57.1（買い足し設定・保存場所改善） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
+  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.57.2（商品名の変更・統合） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
   <div class="card" style="margin:6px 0 12px;padding:12px"><div class="row" style="flex-wrap:wrap"><div><strong>🌷 家計簿モード</strong><div class="muted" style="font-size:12px">テストと本番の支出は別々に集計するよ</div></div><select id="accountMode" style="width:auto;min-width:150px" onchange="changeAccountMode(this.value)"><option value="test">🧪 テスト用</option><option value="live">💰 本番用</option></select></div><small id="modeHelp" class="muted"></small></div>
   <nav>
     <button class="tab active" data-page="home">ホーム</button>
@@ -398,7 +398,7 @@ function normalizeData(d){
  result.expenses=Array.isArray(result.expenses)?result.expenses:[];
  result.inventoryModes=result.inventoryModes&&typeof result.inventoryModes==='object'?result.inventoryModes:{};
  for(const mode of ['test','live']){
-   const inv=result.inventoryModes[mode];result.inventoryModes[mode]={items:Array.isArray(inv?.items)?inv.items:[],imports:Array.isArray(inv?.imports)?inv.imports:[]};
+   const inv=result.inventoryModes[mode];result.inventoryModes[mode]={items:Array.isArray(inv?.items)?inv.items:[],imports:Array.isArray(inv?.imports)?inv.imports:[],aliases:Array.isArray(inv?.aliases)?inv.aliases:[]};
  }
  // 初回アップデート時、既存の支出を消さずに全件テスト用へ移す。
  if(!result.modeMigrationDone){result.expenses=result.expenses.map(e=>({...e,accountMode:'test'}));result.accountMode='test';result.modeMigrationDone=true;}
@@ -662,7 +662,7 @@ function updateSplitSum(){
 }
 document.getElementById('fAmount').addEventListener('input',updateSplitSum);
 
-// Inventory v10.57.1: mode-isolated; included in normal JSON backup.
+// Inventory v10.57.2: mode-isolated; included in normal JSON backup.
 function invData(){return data.inventoryModes[currentMode()]}
 function invCleanName(name){return String(name||'').trim().replace(/\s+/g,' ')}
 function invGuessPlace(name,category){
@@ -677,7 +677,7 @@ function invGuessPlace(name,category){
 function invNeeds(x){return x.autoShop===true&&x.qty<=x.min;}
 function invAdd(name,qty,category,place,unit){
  name=invCleanName(name);qty=Math.max(0,Math.floor(Number(qty)||0));if(!name||!qty)return;
- const inv=invData(),found=inv.items.find(x=>x.name===name);
+ const inv=invData();name=inv.aliases.find(a=>a.from===name)?.to||name;const found=inv.items.find(x=>x.name===name);
  if(found){found.qty+=qty;return}
  inv.items.push({id:'inv_'+Date.now()+'_'+Math.random().toString(36).slice(2),name,qty,place:place||invGuessPlace(name,category),unit:unit||'個',min:1,autoShop:false});
 }
@@ -688,14 +688,25 @@ function inventoryManualAdd(){
 }
 function invAdjust(id,delta){const x=invData().items.find(x=>x.id===id);if(!x)return;x.qty=Math.max(0,x.qty+delta);persist()}
 function invEdit(id,field,value){const x=invData().items.find(x=>x.id===id);if(!x)return;if(field==='min')x.min=Math.max(0,Math.floor(Number(value)||0));else if(field==='autoShop')x.autoShop=value===true;else if(field==='place')x.place=value;else if(field==='unit')x.unit=value;persist()}
-function invDelete(id){if(!confirm('この商品を在庫一覧から削除する？'))return;invData().items=invData().items.filter(x=>x.id!==id);persist()}
+function invRename(id){
+ const inv=invData(),x=inv.items.find(i=>i.id===id);if(!x)return;
+ const raw=prompt('在庫の商品名を入力してね。既存の商品名と同じなら統合できるよ。',x.name);if(raw===null)return;
+ const requested=invCleanName(raw);if(!requested)return;
+ const name=inv.aliases.find(a=>a.from===requested)?.to||requested;if(name===x.name)return;
+ const target=inv.items.find(i=>i.name===name),old=x.name;
+ if(target){if(!confirm(`「${old}」を「${name}」に統合する？\n数量：${target.qty}＋${x.qty}\n単位・保存場所・買い足し設定は統合先を使用するよ。${target.unit!==x.unit?'\n注意：単位が異なるよ。数量をそのまま足してよいか確認してね。':''}`))return;target.qty+=x.qty;inv.items=inv.items.filter(i=>i.id!==id);}
+ else{x.name=name;}
+ inv.aliases=inv.aliases.filter(a=>a.from!==old&&a.from!==name).map(a=>a.to===old?{...a,to:name}:a);inv.aliases.push({from:old,to:name});persist();
+}
+function invAliasReset(id){const inv=invData(),x=inv.items.find(i=>i.id===id);if(!x)return;if(!confirm('この商品の名前の紐づけを解除する？ 現在の在庫数は変わらないよ。'))return;inv.aliases=inv.aliases.filter(a=>a.to!==x.name);persist();}
+function invDelete(id){if(!confirm('この商品を在庫一覧から削除する？'))return;const inv=invData(),x=inv.items.find(i=>i.id===id);if(x)inv.aliases=inv.aliases.filter(a=>a.to!==x.name);inv.items=inv.items.filter(x=>x.id!==id);persist()}
 function renderInventory(){
  const list=document.getElementById('invItems'),shop=document.getElementById('invShopping');if(!list||!shop)return;
  const all=invData().items,needed=all.filter(invNeeds);
  shop.innerHTML=needed.length?needed.map(x=>`<div class="item"><div><strong>${esc(x.name)}</strong><br><small>残り ${x.qty}${esc(x.unit)} ／ ${esc(x.place)}</small></div><span class="cat">買い足し</span></div>`).join(''):'<div class="empty">今は買い足し候補がないよ 🌷</div>';
  const filter=document.getElementById('invFilter').value,q=document.getElementById('invSearch').value.trim().toLowerCase();
  const filtered=all.filter(x=>(!filter||x.place===filter)&&(!q||x.name.toLowerCase().includes(q)));
- list.innerHTML=filtered.length?filtered.map(x=>`<div class="item" style="display:block"><div class="row"><div><strong>${esc(x.name)}</strong><br><small>${esc(x.place)} ／ ${invNeeds(x)?'🛒 買い足し候補':(x.qty>0?'在庫あり':'在庫なし')}</small></div><div class="actions" style="display:flex;flex-wrap:nowrap;align-items:center;gap:5px;flex-shrink:0"><button class="btn secondary" onclick="invAdjust('${x.id}',-1)">－</button><strong>${x.qty}${esc(x.unit)}</strong><button class="btn secondary" onclick="invAdjust('${x.id}',1)">＋</button></div></div><div class="formgrid" style="margin-top:8px"><div><label>買い物リストへの自動追加</label><select onchange="invEdit('${x.id}','autoShop',this.value==='on')"><option value="off" ${x.autoShop!==true?'selected':''}>OFF（追加しない）</option><option value="on" ${x.autoShop===true?'selected':''}>ON（自動追加）</option></select></div><div><label>買い足し基準（残り何個以下）</label><input type="number" min="0" step="1" value="${x.min}" onchange="invEdit('${x.id}','min',this.value)"></div><div><label>保存場所</label><select onchange="invEdit('${x.id}','place',this.value)">${['冷蔵庫','冷凍庫','常温・食品庫','日用品収納','トイレ・洗面','その他'].map(p=>`<option ${x.place===p?'selected':''}>${p}</option>`).join('')}</select></div></div><div class="actions"><button class="btn secondary" onclick="invDelete('${x.id}')">一覧から削除</button></div></div>`).join(''):'<div class="empty">表示する在庫はまだないよ 🌷</div>';
+ list.innerHTML=filtered.length?filtered.map(x=>`<div class="item" style="display:block"><div class="row"><div><strong>${esc(x.name)}</strong><br><small>${esc(x.place)} ／ ${invNeeds(x)?'🛒 買い足し候補':(x.qty>0?'在庫あり':'在庫なし')}</small></div><div class="actions" style="display:flex;flex-wrap:nowrap;align-items:center;gap:5px;flex-shrink:0"><button class="btn secondary" onclick="invAdjust('${x.id}',-1)">－</button><strong>${x.qty}${esc(x.unit)}</strong><button class="btn secondary" onclick="invAdjust('${x.id}',1)">＋</button></div></div><div class="formgrid" style="margin-top:8px"><div><label>買い物リストへの自動追加</label><select onchange="invEdit('${x.id}','autoShop',this.value==='on')"><option value="off" ${x.autoShop!==true?'selected':''}>OFF（追加しない）</option><option value="on" ${x.autoShop===true?'selected':''}>ON（自動追加）</option></select></div><div><label>買い足し基準（残り何個以下）</label><input type="number" min="0" step="1" value="${x.min}" onchange="invEdit('${x.id}','min',this.value)"></div><div><label>保存場所</label><select onchange="invEdit('${x.id}','place',this.value)">${['冷蔵庫','冷凍庫','常温・食品庫','日用品収納','トイレ・洗面','その他'].map(p=>`<option ${x.place===p?'selected':''}>${p}</option>`).join('')}</select></div></div><div class="actions"><button class="btn secondary" onclick="invRename('${x.id}')">名前変更・統合</button>${invData().aliases.some(a=>a.to===x.name)?`<button class="btn secondary" onclick="invAliasReset('${x.id}')">紐づけ解除</button>`:''}<button class="btn secondary" onclick="invDelete('${x.id}')">一覧から削除</button></div></div>`).join(''):'<div class="empty">表示する在庫はまだないよ 🌷</div>';
 }
 function invImportLines(lines,key){
  const inv=invData();if(inv.imports.includes(key))return;
