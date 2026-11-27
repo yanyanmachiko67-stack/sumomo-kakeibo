@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>すもも家計簿 Ver.10.57.4（収入・口座連動）</title>
+<title>すもも家計簿 Ver.10.57.5（収入・口座連動）</title>
 <style>
 :root{--pink:#e88ca8;--pink2:#f7dce5;--ink:#3d3438;--muted:#8b7d83;--bg:#fff8fa;--card:#fff;--line:#eadde2;--green:#79b89a;--blue:#8caed8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
@@ -33,7 +33,7 @@ input[type="month"]::-webkit-datetime-edit,input[type="date"]::-webkit-datetime-
 </head>
 <body>
 <div class="app">
-  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.57.4（収入・口座連動） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
+  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.57.5（収入・口座連動） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
   <div class="card" style="margin:6px 0 12px;padding:12px"><div class="row" style="flex-wrap:wrap"><div><strong>🌷 家計簿モード</strong><div class="muted" style="font-size:12px">テストと本番の支出は別々に集計するよ</div></div><select id="accountMode" style="width:auto;min-width:150px" onchange="changeAccountMode(this.value)"><option value="test">🧪 テスト用</option><option value="live">💰 本番用</option></select></div><small id="modeHelp" class="muted"></small></div>
   <nav>
     <button class="tab active" data-page="home">ホーム</button>
@@ -266,7 +266,7 @@ input[type="month"]::-webkit-datetime-edit,input[type="date"]::-webkit-datetime-
     <div class="card">
       <h2>今月の予算・貯金</h2><p class="muted" style="font-size:12px">🧪 テスト用と 💰 本番用で収入・貯金・カテゴリ予算は別々に保存されるよ。上の家計簿モードを切り替えて設定してね。</p>
       <div class="formgrid">
-        <div><label>今月の収入（登録合計）</label><input id="income" type="number" readonly><small>下の収入登録から反映。旧手入力額は別枠で保持。</small><label>旧手入力収入（口座反映なし）</label><input id="legacyIncome" type="number" min="0"></div>
+        <div><label>今月の収入（登録合計）</label><input id="income" type="number" readonly><small>下の収入登録から自動集計。</small><p id="legacyIncomeNotice" class="muted" hidden></p></div>
         <div><label>今月の貯金</label><input id="saving" type="number" min="0"></div>
       </div>
       <div class="actions"><button class="btn" onclick="saveBudget()">保存する</button></div>
@@ -557,7 +557,7 @@ function render(){
   document.getElementById('foodBar').style.width=Math.min(100,foodBudget?food/foodBudget*100:0)+'%';
   const recent=[...modeExpenses()].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,8);
   document.getElementById('recent').innerHTML=recent.length?recent.map(e=>`<div class="item"><div><strong>${esc(e.store||'支出')}</strong><span class="cat">${Array.isArray(e.splits)&&e.splits.length?'カテゴリ分け':esc(e.category)}</span><br><small>${esc(e.date)} · ${esc(e.payment||'')}${e.subcategory?' · '+esc(e.subcategory):''}${e.who?' · '+esc(e.who):''}${e.paymentDetail?'（'+esc(e.paymentDetail)+'）':''}</small>${Array.isArray(e.splits)&&e.splits.length?'<br><small>'+e.splits.map(x=>esc(x.category)+' '+yen(x.amount)).join(' / ')+'</small>':''}</div><div style="display:flex;align-items:center;gap:10px"><div class="amount">${yen(e.amount)}</div><button class="btn secondary" style="padding:7px 10px;font-size:12px" onclick="editExpense('${e.id}')">編集</button><button class="btn danger" style="padding:7px 10px;font-size:12px" onclick="removeExpense('${e.id}')">削除</button></div></div>`).join(''):'<div class="empty">まだ支出がありません</div>';
-  document.getElementById('income').value=incomeTotal(); document.getElementById('legacyIncome').value=modeBudget().income||0; renderIncome(); document.getElementById('saving').value=modeBudget().saving||0;
+  document.getElementById('income').value=incomeTotal(); const legacyNotice=document.getElementById('legacyIncomeNotice'); legacyNotice.hidden=!Number(modeBudget().income); legacyNotice.textContent=Number(modeBudget().income)?'以前の手入力収入 '+yen(modeBudget().income)+' は保存されていますが、集計対象外です。必要な収入は下から登録してね。':''; renderIncome(); document.getElementById('saving').value=modeBudget().saving||0;
   renderCats(); renderPaymentMethods(); renderBudget(); renderPie(); renderSplitRows(); renderCarLoan(); renderFixedRules(); renderFixedCheck(); renderMobilePreview(); renderFinance(); renderExpenseHistory(); renderMonthlyHistory(); renderInventory();
 }
 const subcategoryOptions={
@@ -783,7 +783,7 @@ function editExpense(id){pendingReceiptLearning=null;
  showPage('add');
 }
 function clearForm(){pendingReceiptLearning=null;editingId=null;splitRows=[];document.getElementById('splitToggle').checked=false;toggleSplit();document.getElementById('fDate').value=new Date().toISOString().slice(0,10);document.getElementById('fAmount').value='';document.getElementById('fStore').value='';document.getElementById('fPaymentDetail').value='';document.getElementById('fNote').value='';document.getElementById('fWho').value='';renderExpenseSubcategories('');document.getElementById('expenseSaveBtn').textContent='登録する';togglePaymentDetail()}
-function saveBudget(){modeBudget().income=Number(document.getElementById('legacyIncome').value)||0;modeBudget().saving=Number(document.getElementById('saving').value)||0;persist();alert('このモードの予算を保存したよ！')}
+function saveBudget(){modeBudget().saving=Number(document.getElementById('saving').value)||0;persist();alert('このモードの予算を保存したよ！')}
 function editCategoryBudget(encodedName){
  const name=decodeURIComponent(encodedName);
  const c=cats().find(x=>x.name===name);
@@ -2106,10 +2106,10 @@ function validYen(x,allowZero=false){return x!==''&&Number.isSafeInteger(Number(
 function bankOptions(selected){return bankNames.map(n=>`<option value="${n}" ${n===selected?'selected':''}>${n}</option>`).join('')}
 function balanceOf(name){const f=finance();let n=Number(f.balances[name]||0);for(const t of f.transfers){if(t.from===name)n-=t.amount+t.fee;if(t.to===name)n+=t.amount;}for(const c of f.childcare)if(c.bank===name)n-=c.amount;for(const r of f.refunds)if(r.bank===name)n+=r.amount;for(const r of f.incomes)if(r.bank===name)n+=Number(r.amount);return n}
 
-function incomeTotal(){return (Number(modeBudget().income)||0)+finance().incomes.filter(r=>inPeriod(r.date)).reduce((a,r)=>a+Number(r.amount),0)}
+function incomeTotal(){return finance().incomes.filter(r=>inPeriod(r.date)).reduce((a,r)=>a+Number(r.amount),0)}
 function resetIncomeEntry(){incomeEditId=null;document.getElementById('incAmount').value='';document.getElementById('incSave').textContent='収入を登録する';}
 function renderIncome(){const d=document.getElementById('incDate'),n=new Date();if(!d.value)d.value=`${n.getFullYear()}-${pad(n.getMonth()+1)}-${pad(n.getDate())}`;const b=document.getElementById('incBank');b.innerHTML=bankOptions(b.value||bankNames[0]);document.getElementById('incHistory').innerHTML='<h3>収入履歴（全期間）</h3>'+finance().incomes.slice().sort((a,b)=>b.date.localeCompare(a.date)).map(r=>`<div class="item"><div><strong>${esc(r.type)} ${yen(r.amount)}</strong><br><small>${esc(r.date)} · ${esc(r.bank)}</small></div><button class="btn secondary" onclick="editIncomeEntry('${r.id}')">編集</button><button class="btn danger" onclick="deleteIncomeEntry('${r.id}')">削除</button></div>`).join('');}
-function saveIncomeEntry(){const date=document.getElementById('incDate').value,type=document.getElementById('incType').value,raw=document.getElementById('incAmount').value,bank=document.getElementById('incBank').value;const f=finance();if(!date||!validYen(raw)||!bankNames.includes(bank)){alert('日付・金額・口座を確認してね');return}if(f.balances[bank]===undefined){alert('先に入金前の初期口座残高を設定してね');return}const amount=Number(raw);if(f.incomes.some(r=>r.id!==incomeEditId&&r.date===date&&r.amount===amount&&r.bank===bank&&r.type===type)&&!confirm('同じ収入が登録済みだよ。追加する？'))return;if(modeBudget().income&& !confirm('旧手入力収入が残っているよ。二重計上にならないか確認してね。続ける？'))return;const entry={id:incomeEditId||uid(),date,type,amount,bank};if(incomeEditId){const i=f.incomes.findIndex(r=>r.id===incomeEditId);if(i<0)return;f.incomes[i]=entry}else f.incomes.push(entry);resetIncomeEntry();persist();}
+function saveIncomeEntry(){const date=document.getElementById('incDate').value,type=document.getElementById('incType').value,raw=document.getElementById('incAmount').value,bank=document.getElementById('incBank').value;const f=finance();if(!date||!validYen(raw)||!bankNames.includes(bank)){alert('日付・金額・口座を確認してね');return}if(f.balances[bank]===undefined){alert('先に入金前の初期口座残高を設定してね');return}const amount=Number(raw);if(f.incomes.some(r=>r.id!==incomeEditId&&r.date===date&&r.amount===amount&&r.bank===bank&&r.type===type)&&!confirm('同じ収入が登録済みだよ。追加する？'))return;const entry={id:incomeEditId||uid(),date,type,amount,bank};if(incomeEditId){const i=f.incomes.findIndex(r=>r.id===incomeEditId);if(i<0)return;f.incomes[i]=entry}else f.incomes.push(entry);resetIncomeEntry();persist();}
 function editIncomeEntry(id){const r=finance().incomes.find(r=>r.id===id);if(!r)return;incomeEditId=id;for(const [k,v] of [['incDate',r.date],['incType',r.type],['incAmount',r.amount],['incBank',r.bank]])document.getElementById(k).value=v;document.getElementById('incSave').textContent='変更を保存する';document.getElementById('incDate').scrollIntoView({block:'center'});}
 function deleteIncomeEntry(id){if(!confirm('収入を削除して口座残高と家計に反映する？'))return;finance().incomes=finance().incomes.filter(r=>r.id!==id);resetIncomeEntry();persist();}
 function setBankOpening(name){const old=finance().balances[name];const val=prompt(`${name} の初期残高（円）を入力してね。今まで登録した振込・保育料・返金を反映する前の金額だよ。`,old===undefined?'0':String(old));if(val===null)return;if(!Number.isSafeInteger(Number(val))||Number(val)<0){alert('0以上の整数を入力してね');return}finance().balances[name]=Number(val);persist()}
