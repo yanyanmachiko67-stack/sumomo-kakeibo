@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>すもも家計簿 Ver.10.57.2（商品名の変更・統合）</title>
+<title>すもも家計簿 Ver.10.57.3（集計期間表示修正）</title>
 <style>
 :root{--pink:#e88ca8;--pink2:#f7dce5;--ink:#3d3438;--muted:#8b7d83;--bg:#fff8fa;--card:#fff;--line:#eadde2;--green:#79b89a;--blue:#8caed8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
@@ -33,7 +33,7 @@ input[type="month"]::-webkit-datetime-edit,input[type="date"]::-webkit-datetime-
 </head>
 <body>
 <div class="app">
-  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.57.2（商品名の変更・統合） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
+  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.57.3（集計期間表示修正） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
   <div class="card" style="margin:6px 0 12px;padding:12px"><div class="row" style="flex-wrap:wrap"><div><strong>🌷 家計簿モード</strong><div class="muted" style="font-size:12px">テストと本番の支出は別々に集計するよ</div></div><select id="accountMode" style="width:auto;min-width:150px" onchange="changeAccountMode(this.value)"><option value="test">🧪 テスト用</option><option value="live">💰 本番用</option></select></div><small id="modeHelp" class="muted"></small></div>
   <nav>
     <button class="tab active" data-page="home">ホーム</button>
@@ -448,7 +448,7 @@ function periodStartEnd(base=new Date()){
   return {start,end};
 }
 function inPeriod(date){const {start,end}=periodStartEnd(); const d=dateObj(date); return d>=start&&d<end}
-function periodLabel(){const {start,end}=periodStartEnd(); return `${start.getFullYear()}/${pad(start.getMonth()+1)}/${pad(start.getDate())} 〜 ${end.getFullYear()}/${pad(end.getMonth()+1)}/${pad(end.getDate())}`}
+function periodLabel(){const {start,end}=periodStartEnd(); end.setDate(end.getDate()-1); return `${start.getFullYear()}/${pad(start.getMonth()+1)}/${pad(start.getDate())} 〜 ${end.getFullYear()}/${pad(end.getMonth()+1)}/${pad(end.getDate())}`}
 function cats(){return data.categories.map(c=>({...c,budget:modeBudget().categoryBudgets[c.name]??c.budget??0}))}
 function modeBudget(){return data.modeBudgets[currentMode()]}
 function currentMode(){return data.accountMode==='live'?'live':'test'}
