@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>すもも家計簿 Ver.10.57.5（収入・口座連動）</title>
+<title>すもも家計簿 Ver.10.57.6（カード引き落とし）</title>
 <style>
 :root{--pink:#e88ca8;--pink2:#f7dce5;--ink:#3d3438;--muted:#8b7d83;--bg:#fff8fa;--card:#fff;--line:#eadde2;--green:#79b89a;--blue:#8caed8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
@@ -33,7 +33,7 @@ input[type="month"]::-webkit-datetime-edit,input[type="date"]::-webkit-datetime-
 </head>
 <body>
 <div class="app">
-  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.57.5（収入・口座連動） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
+  <div class="top"><div><div class="brand">🌷 すもも家計簿</div><div class="sub">Ver.10.57.6（カード引き落とし） · 給料日27日基準 · かわいく続ける家計簿</div></div></div>
   <div class="card" style="margin:6px 0 12px;padding:12px"><div class="row" style="flex-wrap:wrap"><div><strong>🌷 家計簿モード</strong><div class="muted" style="font-size:12px">テストと本番の支出は別々に集計するよ</div></div><select id="accountMode" style="width:auto;min-width:150px" onchange="changeAccountMode(this.value)"><option value="test">🧪 テスト用</option><option value="live">💰 本番用</option></select></div><small id="modeHelp" class="muted"></small></div>
   <nav>
     <button class="tab active" data-page="home">ホーム</button>
@@ -245,6 +245,8 @@ input[type="month"]::-webkit-datetime-edit,input[type="date"]::-webkit-datetime-
       </div><div class="actions"><button class="btn" onclick="registerTransfer()">振込を登録する</button></div>
       <p class="muted" style="font-size:12px">手数料は振込元口座から減り、支出の「固定費」に計上するよ。口座残高は登録した取引だけを反映した試算で、銀行との自動連携ではないよ。</p><div id="transferHistory" class="list"></div>
     </div>
+    <div class="card"><h2>💳 クレジットカード引き落とし</h2><p class="muted">銀行残高だけから差し引くよ。購入時の支出とは別管理。実際に引き落とされた金額を登録してね。</p>
+<div class="formgrid"><div><label>引き落とし日</label><input type="date" id="csDate"></div><div><label>カードの種類</label><select id="csCard"></select></div><div><label>引き落とし元口座</label><select id="csBank"></select></div><div><label>引き落とし金額（円）</label><input type="number" min="1" step="1" id="csAmount"></div></div><div class="actions"><button class="btn" id="csSave" onclick="saveCardSettlement()">引き落としを登録する</button><button class="btn secondary" onclick="resetCardSettlement()">入力をクリア</button></div><div id="csHistory" class="list"></div></div>
     <div class="card"><h2>👧👶 保育料・給食費</h2><p class="muted" style="font-size:12px">ハガキごとに別々に登録。楽天銀行の請求書払いを想定。金額が未定なら空欄でOK。登録前に支払日を確認してね。</p>
       <div class="formgrid"><div><label>対象月</label><input id="childMonth" type="month" onchange="renderFinance()"></div><div><label>子ども</label><select id="childPerson" onchange="renderFinance()"><option value="older">👧 上の子</option><option value="younger">👶 下の子</option></select></div>
       <div><label>保育料（円）</label><input id="childFee" type="number" min="0" step="1" placeholder="ハガキの金額を入力" oninput="updateChildTotal()"></div>
@@ -426,7 +428,7 @@ function normalizeData(d){
     const f=old&&typeof old==='object'&&!Array.isArray(old)?old:{};
     const balances=f.balances&&typeof f.balances==='object'&&!Array.isArray(f.balances)?f.balances:{};
     result.financeModes[mode]={
-      ...f, balances, incomes:Array.isArray(f.incomes)?f.incomes:[],
+      ...f, balances, cardSettlements:Array.isArray(f.cardSettlements)?f.cardSettlements:[], incomes:Array.isArray(f.incomes)?f.incomes:[],
       transfers:Array.isArray(f.transfers)?f.transfers:[],
       childcare:Array.isArray(f.childcare)?f.childcare:[],
       advances:Array.isArray(f.advances)?f.advances:[],
@@ -2104,7 +2106,7 @@ function finance(){return data.financeModes[currentMode()]}
 function uid(){return (typeof crypto!=='undefined'&&crypto.randomUUID)?crypto.randomUUID():String(Date.now())+'_'+Math.random().toString(36).slice(2)}
 function validYen(x,allowZero=false){return x!==''&&Number.isSafeInteger(Number(x))&&Number(x)>=(allowZero?0:1)}
 function bankOptions(selected){return bankNames.map(n=>`<option value="${n}" ${n===selected?'selected':''}>${n}</option>`).join('')}
-function balanceOf(name){const f=finance();let n=Number(f.balances[name]||0);for(const t of f.transfers){if(t.from===name)n-=t.amount+t.fee;if(t.to===name)n+=t.amount;}for(const c of f.childcare)if(c.bank===name)n-=c.amount;for(const r of f.refunds)if(r.bank===name)n+=r.amount;for(const r of f.incomes)if(r.bank===name)n+=Number(r.amount);return n}
+function balanceOf(name){const f=finance();let n=Number(f.balances[name]||0);for(const t of f.transfers){if(t.from===name)n-=t.amount+t.fee;if(t.to===name)n+=t.amount;}for(const c of f.childcare)if(c.bank===name)n-=c.amount;for(const r of f.refunds)if(r.bank===name)n+=r.amount;for(const r of f.incomes)if(r.bank===name)n+=Number(r.amount);for(const r of f.cardSettlements)if(r.bank===name)n-=Number(r.amount);return n}
 
 function incomeTotal(){return finance().incomes.filter(r=>inPeriod(r.date)).reduce((a,r)=>a+Number(r.amount),0)}
 function resetIncomeEntry(){incomeEditId=null;document.getElementById('incAmount').value='';document.getElementById('incSave').textContent='収入を登録する';}
@@ -2121,8 +2123,14 @@ function initFinanceInputs(){
  const el=document.getElementById(id);const selected=el.value||defaultName;el.innerHTML=bankOptions(selected);el.value=selected;
  }
 }
+let csEdit=null,csMode=null;
+function resetCardSettlement(){csEdit=null;document.getElementById('csAmount').value='';document.getElementById('csSave').textContent='引き落としを登録する';}
+function renderCardSettlements(){const f=finance(),d=document.getElementById('csDate'),c=document.getElementById('csCard'),b=document.getElementById('csBank');if(csMode!==currentMode()){csMode=currentMode();resetCardSettlement();d.value='';}if(!d.value){const n=new Date();d.value=`${n.getFullYear()}-${pad(n.getMonth()+1)}-${pad(n.getDate())}`;}const names=[...new Set(['楽天カード','PayPayカード',...data.paymentMethods.filter(x=>x.type==='credit').map(x=>x.name),...f.cardSettlements.map(x=>x.card)])];const selected=c.value;c.innerHTML=names.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');if(names.includes(selected))c.value=selected;b.innerHTML=bankOptions(b.value||bankNames[0]);document.getElementById('csHistory').innerHTML='<h3>引き落とし履歴（全期間）</h3>'+f.cardSettlements.slice().sort((a,b)=>b.date.localeCompare(a.date)).map(r=>`<div class="item"><div><strong>${esc(r.card)} ${yen(r.amount)}</strong><br><small>${esc(r.date)} · ${esc(r.bank)}</small></div><button class="btn secondary" onclick="editCardSettlement('${r.id}')">編集</button><button class="btn danger" onclick="deleteCardSettlement('${r.id}')">削除</button></div>`).join('');}
+function saveCardSettlement(){const f=finance(),date=document.getElementById('csDate').value,card=document.getElementById('csCard').value,bank=document.getElementById('csBank').value,raw=document.getElementById('csAmount').value;if(!date||!card||!bankNames.includes(bank)||!validYen(raw)||f.balances[bank]===undefined){alert('日付・カード・金額・初期残高を確認してね');return;}const amount=Number(raw);if(f.cardSettlements.some(r=>r.id!==csEdit&&r.date===date&&r.card===card&&r.bank===bank&&r.amount===amount)){alert('同じ引き落としが登録済みだよ');return;}if(!confirm(`${date} ${card} ${yen(amount)} を ${bank} から差し引く？`))return;const entry={id:csEdit||uid(),date,card,bank,amount};if(csEdit){const i=f.cardSettlements.findIndex(r=>r.id===csEdit);if(i<0)return;f.cardSettlements[i]=entry;}else f.cardSettlements.push(entry);resetCardSettlement();persist();}
+function editCardSettlement(id){const r=finance().cardSettlements.find(x=>x.id===id);if(!r)return;csEdit=id;for(const [k,v] of [['csDate',r.date],['csCard',r.card],['csBank',r.bank],['csAmount',r.amount]])document.getElementById(k).value=v;document.getElementById('csSave').textContent='変更を保存する';document.getElementById('csDate').scrollIntoView({block:'center'});}
+function deleteCardSettlement(id){if(!confirm('引き落とし記録を削除して残高を戻す？'))return;finance().cardSettlements=finance().cardSettlements.filter(r=>r.id!==id);resetCardSettlement();persist();}
 function renderFinance(){
- initFinanceInputs();const f=finance();
+ renderCardSettlements();initFinanceInputs();const f=finance();
  document.getElementById('bankBalances').innerHTML=bankNames.map(n=>`<div class="item"><div><strong>${n}</strong><br><small>初期残高 ${f.balances[n]===undefined?'未設定':yen(f.balances[n])}</small></div><div style="text-align:right"><strong>${f.balances[n]===undefined?'未設定':yen(balanceOf(n))}</strong><br><button class="btn secondary" style="padding:6px;margin-top:5px" onclick="setBankOpening('${n}')">初期残高を設定</button></div></div>`).join('');
  document.getElementById('transferHistory').innerHTML='<h3>最近の振込</h3>'+([...f.transfers].reverse().slice(0,10).map(t=>`<div class="item"><div><strong>${yen(t.amount)}</strong><br><small>${t.date} ${t.from} → ${t.to}${t.fee?' ／ 手数料'+yen(t.fee):''}</small></div><button class="btn danger" onclick="deleteFinance('transfers','${t.id}')">削除</button></div>`).join('')||'<p class="muted">まだ振込記録はないよ</p>');
  const month=document.getElementById('childMonth').value,person=document.getElementById('childPerson').value;
